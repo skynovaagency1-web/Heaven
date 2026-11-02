@@ -14,7 +14,16 @@ export interface Trip {
   createdAt: string
 }
 
+export interface User {
+  name: string
+  email: string
+  since: string
+}
+
 interface Store {
+  user: User | null
+  signIn: (u: User) => void
+  signOut: () => void
   listings: Listing[]
   getListing: (id: string) => Listing | undefined
   wishlist: string[]
@@ -55,10 +64,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [trips, setTrips] = usePersisted<Trip[]>('heaven.trips', [])
   const [customListings, setCustom] = usePersisted<Listing[]>('heaven.listings', [])
   const [paused, setPaused] = usePersisted<string[]>('heaven.paused', [])
+  const [user, setUser] = usePersisted<User | null>('heaven.user', null)
 
   const value = useMemo<Store>(() => {
     const all = [...customListings, ...LISTINGS]
     return {
+      user,
+      signIn: (u) => setUser(u),
+      signOut: () => setUser(null),
       listings: all.filter((l) => !paused.includes(l.id)),
       getListing: (id) => all.find((l) => l.id === id),
       wishlist,
@@ -74,7 +87,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       togglePaused: (id) =>
         setPaused((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id])),
     }
-  }, [wishlist, trips, customListings, paused, setWishlist, setTrips, setCustom, setPaused])
+  }, [user, wishlist, trips, customListings, paused, setUser, setWishlist, setTrips, setCustom, setPaused])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

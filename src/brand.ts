@@ -4,3 +4,9 @@
  */
 export const BRAND = 'Heaven'
 export const BRAND_LOWER = BRAND.toLowerCase()
+
+/**
+ * Optional looping hero video (e.g. a MotionSites background). Leave empty to use the hero photo.
+ * Any .mp4 URL works; it plays muted, looped and is skipped for users who prefer reduced motion.
+ */
+export const HERO_VIDEO = ''

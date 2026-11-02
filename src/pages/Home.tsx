@@ -5,82 +5,108 @@ import ListingCard from '../components/ListingCard'
 import { Img, SectionTitle } from '../components/ui'
 import { CATEGORIES, DESTINATIONS, img } from '../data/listings'
 import { useStore } from '../lib/store'
-import { BRAND } from '../brand'
+import { HERO_VIDEO } from '../brand'
 
-const PROMISES = [
-  { icon: 'shield', title: 'Verified in person', text: 'Every home is visited and photographed by our team before it’s listed.' },
-  { icon: 'key', title: 'Seamless arrival', text: 'Private check-in, a welcome hamper and a host who answers in minutes.' },
-  { icon: 'sparkle', title: 'Concierge on call', text: 'Chefs, chauffeurs, boats and tables, arranged before you land.' },
-  { icon: 'medal', title: 'Stay guarantee', text: 'If something isn’t as promised, we rebook or refund. No debate.' },
+const SETTING_COPY: Record<string, string> = {
+  Beachfront: 'Private shorelines',
+  Mountain: 'Chalets & lodges',
+  City: 'Penthouses & lofts',
+  Countryside: 'Vineyards & estates',
+  Desert: 'Riads & oases',
+  Island: 'Villas by the sea',
+}
+
+const REVIEWS = [
+  { text: 'Fresh flowers, a handwritten note, and a table we’d been chasing for years.', who: 'Charlotte', where: 'Villa Aurélia, Antibes' },
+  { text: 'The onsen at dusk, the quiet, the tea ceremony. We didn’t want to leave Kyoto.', who: 'Kenji & Mia', where: 'Hoshizora House, Kyoto' },
+  { text: 'Ski to the door, fire already lit, dinner waiting. Pure magic for our family.', who: 'Oliver', where: 'Chalet Edelweiss, Zermatt' },
+  { text: 'A riad that felt like our own private palace. The rooftop breakfasts!', who: 'Priya', where: 'Riad Noor, Marrakech' },
+  { text: 'Every detail considered, from the linen to the lighting. Flawless concierge.', who: 'James', where: 'Clifton Glasshouse, Cape Town' },
+  { text: 'Vineyard lunches under the pergola. The best week of our year.', who: 'Elena', where: 'Tenuta del Sole, Siena' },
+]
+
+const STATS = [
+  { icon: 'home', value: '1,200+', label: 'Homes inspected in person' },
+  { icon: 'star', value: '4.92', label: 'Average guest rating' },
+  { icon: 'globe', value: '40+', label: 'Destinations' },
+  { icon: 'key', value: '24/7', label: 'Concierge on call' },
 ]
 
 export default function Home() {
   const { listings } = useStore()
-  const featured = [...listings].sort((a, b) => b.rating - a.rating).slice(0, 8)
+  const ranked = [...listings].sort((a, b) => b.rating - a.rating)
+  const signature = ranked.slice(0, 3)
+  const more = ranked.slice(3, 11)
 
   return (
     <>
       <section className="hero">
         <Img className="hero__bg" src={img('1600607687939-ce8a6c25118c', 2400)} alt="" />
+        {HERO_VIDEO && <video className="hero__video" src={HERO_VIDEO} autoPlay muted loop playsInline aria-hidden="true" />}
         <div className="hero__scrim" />
         <div className="container hero__inner">
-          <span className="eyebrow eyebrow--light">Private homes · 40+ destinations</span>
+          <span className="eyebrow">Private homes · 40+ destinations</span>
           <h1>
             Stay somewhere
             <br />
-            <em>unforgettable.</em>
+            <em>truly extraordinary</em>
           </h1>
+          <span className="flourish" aria-hidden="true" />
           <p className="hero__lead">
-            Hand-picked villas, chalets and city residences
-            <span className="dot" /> verified in person <span className="dot" /> hosted with care.
+            Hand-picked villas <span className="dot" /> Verified in person <span className="dot" /> Hosted with care
           </p>
-          <SearchBar />
-          <div className="hero__chips">
-            {CATEGORIES.map((c) => (
-              <Link key={c.name} to={`/stays?category=${c.name}`} className="chip chip--glass">
-                <Icon name={c.icon} size={16} />
-                {c.name}
-              </Link>
-            ))}
+          <div className="hero__ctas">
+            <Link to="/stays" className="btn btn--primary btn--lg">
+              Explore stays <Icon name="arrow" size={18} />
+            </Link>
+            <Link to="/host" className="tour-link">
+              <span className="tour-link__ring"><Icon name="play" size={14} filled /></span>
+              List your home
+            </Link>
           </div>
+          <SearchBar />
         </div>
       </section>
 
       <section className="section container">
-        <SectionTitle eyebrow="The collection" title="Featured stays">
-          Our highest-rated homes this season, chosen by guests.
-        </SectionTitle>
+        <SectionTitle title="Find your setting" />
+        <div className="settings">
+          {CATEGORIES.map((c) => (
+            <Link key={c.name} to={`/stays?category=${c.name}`} className="setting glass-card spot">
+              <span className="setting__icon"><Icon name={c.icon} size={30} strokeWidth={1.2} /></span>
+              <h3>{c.name}</h3>
+              <p>{SETTING_COPY[c.name]}</p>
+              <span className="glow-line" aria-hidden="true" />
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="section section--glow container">
+        <SectionTitle title="Signature stays">This season’s highest-rated homes, chosen by our guests.</SectionTitle>
+        <div className="signature">
+          {signature.map((l) => (
+            <ListingCard key={l.id} listing={l} variant="feature" />
+          ))}
+        </div>
+      </section>
+
+      <section className="section section--flush container">
+        <div className="row-head">
+          <h2>More to discover</h2>
+          <Link to="/stays" className="text-link">
+            View all stays <Icon name="arrow" size={16} />
+          </Link>
+        </div>
         <div className="grid-cards">
-          {featured.map((l) => (
+          {more.map((l) => (
             <ListingCard key={l.id} listing={l} />
           ))}
         </div>
-        <div className="center mt-lg">
-          <Link to="/stays" className="btn btn--outline">
-            View all stays <Icon name="arrow" size={18} />
-          </Link>
-        </div>
-      </section>
-
-      <section className="section section--pine">
-        <div className="container">
-          <SectionTitle eyebrow={`The ${BRAND} standard`} title="Hospitality, not just a booking" />
-          <div className="promises">
-            {PROMISES.map((p) => (
-              <div key={p.title} className="glass-card">
-                <span className="glass-card__icon">
-                  <Icon name={p.icon} size={28} strokeWidth={1.3} />
-                </span>
-                <h3>{p.title}</h3>
-                <p>{p.text}</p>
-              </div>
-            ))}
-          </div>
-        </div>
       </section>
 
       <section className="section container">
-        <SectionTitle eyebrow="Where to next" title="Trending destinations" />
+        <SectionTitle title="Trending destinations" />
         <div className="destinations">
           {DESTINATIONS.map((d, i) => (
             <Link key={d.city} to={`/stays?where=${d.city}`} className={`dest ${i === 0 ? 'dest--big' : ''}`}>
@@ -96,20 +122,16 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="stats">
-        <div className="container stats__inner">
-          {[
-            ['1,200+', 'Homes, each inspected'],
-            ['4.92', 'Average guest rating'],
-            ['40+', 'Destinations worldwide'],
-            ['24/7', 'Concierge support'],
-          ].map(([n, l]) => (
-            <div key={l} className="stat">
-              <strong>{n}</strong>
-              <span>{l}</span>
+      <section className="stats container">
+        {STATS.map((s) => (
+          <div key={s.label} className="stat">
+            <span className="stat__icon"><Icon name={s.icon} size={30} strokeWidth={1.2} /></span>
+            <div>
+              <strong>{s.value}</strong>
+              <span>{s.label}</span>
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </section>
 
       <section className="section container">
@@ -118,12 +140,12 @@ export default function Home() {
           <div className="host-cta__body">
             <span className="eyebrow">For homeowners</span>
             <h2>
-              Your home, <em>beautifully</em> hosted.
+              Your home, <em>beautifully</em> hosted
             </h2>
             <p>
-              Join a collection of the world’s most remarkable homes. We handle photography, pricing, guest vetting and concierge, so you earn more and worry less.
+              Join a collection of remarkable homes. We handle photography, pricing, guest vetting and concierge, so you earn more and worry less.
             </p>
-            <div className="row gap">
+            <div className="row gap wrap">
               <Link to="/host" className="btn btn--primary">
                 Become a host <Icon name="arrow" size={18} />
               </Link>
@@ -135,13 +157,28 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="section section--tight container">
-        <figure className="quote">
-          <blockquote>
-            “The most thoughtful stay we’ve ever had. Fresh flowers, a handwritten note, and a host who booked us a table we’d been trying to get for years.”
-          </blockquote>
-          <figcaption>Charlotte &amp; Marcus · stayed at Villa Aurélia, Antibes</figcaption>
-        </figure>
+      <section className="section section--flush">
+        <div className="container"><SectionTitle title="Words from our guests" /></div>
+        <div className="marquee" aria-label="Guest reviews">
+          {[0, 1].map((row) => (
+            <div key={row} className={`marquee__row ${row ? 'marquee__row--rev' : ''}`}>
+              {[...REVIEWS, ...REVIEWS].map((r, i) => (
+                <figure key={i} className="review-card spot" aria-hidden={i >= REVIEWS.length}>
+                  <span className="review-card__stars" aria-label="5 stars">★★★★★</span>
+                  <blockquote>“{r.text}”</blockquote>
+                  <figcaption><strong>{r.who}</strong> · {r.where}</figcaption>
+                </figure>
+              ))}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="finale container">
+        <Link to="/stays" className="btn btn--primary btn--lg">
+          Start your journey
+        </Link>
+        <p className="script">Let’s find your little piece of heaven</p>
       </section>
     </>
   )

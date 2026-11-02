@@ -30,7 +30,7 @@ npm run build    # production build in dist/
 ## Notes
 
 - Built with Vite, React 18, TypeScript and React Router. No UI framework; styles live in `src/styles.css` with brand tokens at the top.
-- Brand: pine / paper / ink with a terracotta accent; gold is reserved for ratings. Headings use the system serif, body the system sans.
+- Look: dark luxury (warm near-black, gold light, Cormorant Garamond display + Manrope body), using the brand sheet's mark. Spotlight cards and the reviews marquee follow 21st.dev patterns; set `HERO_VIDEO` in `src/brand.ts` to use a MotionSites background video in the hero.
 - Data is mocked in `src/data/listings.ts`. Wishlist, trips and host listings persist in `localStorage`. Payments are a demo; nothing is charged.
 - Photos load from Unsplash. If one fails, a warm gradient placeholder is shown.
 - `vercel.json` and `public/_redirects` handle SPA routing on Vercel and Netlify.

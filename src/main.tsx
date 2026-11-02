@@ -15,6 +15,9 @@ import HostDashboard from './pages/HostDashboard'
 import NewListing from './pages/NewListing'
 import HostProfile from './pages/HostProfile'
 import NotFound from './pages/NotFound'
+import { installSpotlight } from './lib/spotlight'
+
+installSpotlight()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

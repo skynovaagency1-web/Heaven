@@ -6,13 +6,41 @@ import type { Listing } from '../data/listings'
 import { useStore } from '../lib/store'
 import { cx, money, nightsBetween } from '../lib/utils'
 
-export default function ListingCard({ listing, query = '' }: { listing: Listing; query?: string }) {
+export default function ListingCard({ listing, query = '', variant = 'default' }: { listing: Listing; query?: string; variant?: 'default' | 'feature' }) {
   const { wishlist, toggleWish } = useStore()
   const [idx, setIdx] = useState(0)
   const saved = wishlist.includes(listing.id)
   const params = new URLSearchParams(query)
   const nights = nightsBetween(params.get('checkIn'), params.get('checkOut'))
   const n = listing.images.length
+  const href = `/stays/${listing.id}${query ? `?${query}` : ''}`
+
+  if (variant === 'feature') {
+    return (
+      <article className="feature spot">
+        <Link to={href} className="feature__link" aria-label={listing.title}>
+          <Img src={listing.images[0]} alt="" />
+          <div className="feature__body">
+            <span className="feature__loc">{listing.city}, {listing.country}</span>
+            <h3>{listing.title}</h3>
+            <p>{listing.tagline}</p>
+            <span className="glow-line" aria-hidden="true" />
+            <span className="feature__meta">
+              <Stars value={listing.rating} small /> <span>From {money(listing.price)} / night</span>
+            </span>
+          </div>
+        </Link>
+        <button
+          className={cx('card__heart', saved && 'is-saved')}
+          aria-label={saved ? 'Remove from wishlist' : 'Save to wishlist'}
+          aria-pressed={saved}
+          onClick={() => toggleWish(listing.id)}
+        >
+          <Icon name="heart" size={20} filled={saved} />
+        </button>
+      </article>
+    )
+  }
 
   return (
     <article className="card">

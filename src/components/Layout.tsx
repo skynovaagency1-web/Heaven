@@ -6,10 +6,13 @@ import { useStore } from '../lib/store'
 import { cx } from '../lib/utils'
 import { BRAND, BRAND_LOWER } from '../brand'
 
+/** Pages that open with a full-bleed photo, so the nav starts transparent over them. */
+const HERO_PAGES = ['/destinations', '/about', '/trust-safety', '/signin', '/signup']
+
 function Navbar() {
   const { pathname } = useLocation()
-  const { wishlist, trips } = useStore()
-  const overHero = pathname === '/' || pathname === '/host'
+  const { wishlist, trips, user } = useStore()
+  const overHero = pathname === '/' || pathname === '/host' || HERO_PAGES.some((p) => pathname.startsWith(p))
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
 
@@ -31,13 +34,21 @@ function Navbar() {
         <Logo tone={transparent ? 'light' : 'ink'} />
         <nav className={cx('nav__links', open && 'is-open')} aria-label="Main">
           <NavLink to="/stays">Explore stays</NavLink>
+          <NavLink to="/destinations">Destinations</NavLink>
           <NavLink to="/wishlist">
             Wishlist{wishlist.length > 0 && <span className="pill-count">{wishlist.length}</span>}
           </NavLink>
           <NavLink to="/trips">
             Trips{trips.length > 0 && <span className="pill-count">{trips.length}</span>}
           </NavLink>
-          <NavLink to="/host/dashboard">Host dashboard</NavLink>
+          {user ? (
+            <NavLink to="/account" className="nav__user" aria-label="Your account">
+              <span className="avatar avatar--initial avatar--sm" aria-hidden="true">{user.name.charAt(0)}</span>
+              <span className="nav__user-name">{user.name.split(' ')[0]}</span>
+            </NavLink>
+          ) : (
+            <NavLink to="/signin">Sign in</NavLink>
+          )}
           <Link to="/host" className="btn btn--primary btn--sm nav__cta">
             Become a host
           </Link>
@@ -74,17 +85,26 @@ function Footer() {
             <Link to="/hosts/h1">Meet our hosts</Link>
           </div>
           <div>
+            <h4>Company</h4>
+            <Link to="/about">About us</Link>
+            <Link to="/destinations">Destinations</Link>
+            <Link to="/contact">Contact</Link>
+            <Link to="/signin">Sign in</Link>
+          </div>
+          <div>
             <h4>Support</h4>
             <Link to="/trips">Your trips</Link>
-            <a href="#help">Help centre</a>
-            <a href="#safety">Trust &amp; safety</a>
-            <a href="#cancel">Cancellation options</a>
+            <Link to="/help">Help centre</Link>
+            <Link to="/trust-safety">Trust &amp; safety</Link>
+            <Link to="/cancellation">Cancellation options</Link>
           </div>
         </div>
         <div className="footer__bottom">
           <span>© {new Date().getFullYear()} {BRAND}. All rights reserved.</span>
           <span className="footer__mark"><Mark size={16} /> {BRAND_LOWER}</span>
-          <span>Privacy · Terms · Sitemap</span>
+          <span className="footer__legal">
+            <Link to="/privacy">Privacy</Link> · <Link to="/terms">Terms</Link> · <Link to="/sitemap">Sitemap</Link>
+          </span>
         </div>
       </div>
     </footer>

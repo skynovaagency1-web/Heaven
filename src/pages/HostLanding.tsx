@@ -21,10 +21,11 @@ export default function HostLanding() {
 
   return (
     <>
-      <section className="hero hero--host">
+      <section className="hero-wrap container">
+        <div className="hero hero--host">
         <Img className="hero__bg" src={img('1600585154340-be6161a56a0c', 2400)} alt="" />
         <div className="hero__scrim" />
-        <div className="container hero__inner hero__inner--split">
+        <div className="hero__inner hero__inner--split">
           <div>
             <span className="eyebrow eyebrow--light">Host with {BRAND}</span>
             <h1>
@@ -56,6 +57,7 @@ export default function HostLanding() {
               <input type="range" className="range range--light" min={1} max={30} value={nights} onChange={(e) => setNights(Number(e.target.value))} />
             </label>
           </div>
+        </div>
         </div>
       </section>
 

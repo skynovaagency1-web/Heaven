@@ -46,10 +46,10 @@ export default function TrustSafety() {
 
       <section className="section container">
         <SectionTitle title="How a home earns its place" />
-        <ol className="steps">
+        <ol className="process">
           {STEPS.map((s, i) => (
             <li key={s.title}>
-              <span className="steps__n">{i + 1}</span>
+              <span className="process__n">{i + 1}</span>
               <h3>{s.title}</h3>
               <p>{s.text}</p>
             </li>

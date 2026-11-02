@@ -6,13 +6,10 @@ import { useStore } from '../lib/store'
 import { cx } from '../lib/utils'
 import { BRAND, BRAND_LOWER } from '../brand'
 
-/** Pages that open with a full-bleed photo, so the nav starts transparent over them. */
-const HERO_PAGES = ['/destinations', '/about', '/trust-safety', '/signin', '/signup']
-
 function Navbar() {
   const { pathname } = useLocation()
   const { wishlist, trips, user } = useStore()
-  const overHero = pathname === '/' || pathname === '/host' || HERO_PAGES.some((p) => pathname.startsWith(p))
+  const overHero = false
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
 
@@ -111,6 +108,34 @@ function Footer() {
   )
 }
 
+/** Mobile only: floating glass bar with a raised search button in the middle. */
+function BottomNav() {
+  const { user, wishlist } = useStore()
+  return (
+    <nav className="bottom-nav" aria-label="Quick links">
+      <NavLink to="/" end>
+        <Icon name="home" size={20} strokeWidth={1.4} />
+        <span>Home</span>
+      </NavLink>
+      <NavLink to="/wishlist">
+        <Icon name="heart" size={20} strokeWidth={1.4} />
+        <span>Saved{wishlist.length > 0 && ` · ${wishlist.length}`}</span>
+      </NavLink>
+      <NavLink to="/stays" className="bottom-nav__center" aria-label="Search stays">
+        <Icon name="search" size={22} />
+      </NavLink>
+      <NavLink to="/trips">
+        <Icon name="calendar" size={20} strokeWidth={1.4} />
+        <span>Trips</span>
+      </NavLink>
+      <NavLink to={user ? '/account' : '/signin'}>
+        <Icon name="users" size={20} strokeWidth={1.4} />
+        <span>{user ? 'Account' : 'Sign in'}</span>
+      </NavLink>
+    </nav>
+  )
+}
+
 export default function Layout() {
   const { pathname } = useLocation()
   useEffect(() => {
@@ -123,6 +148,7 @@ export default function Layout() {
         <Outlet />
       </main>
       <Footer />
+      <BottomNav />
     </>
   )
 }

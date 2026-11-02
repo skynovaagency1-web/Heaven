@@ -40,43 +40,42 @@ export default function Home() {
 
   return (
     <>
-      <section className="hero">
-        <Img className="hero__bg" src={img('1600607687939-ce8a6c25118c', 2400)} alt="" />
-        {HERO_VIDEO && <video className="hero__video" src={HERO_VIDEO} autoPlay muted loop playsInline aria-hidden="true" />}
-        <div className="hero__scrim" />
-        <div className="container hero__inner">
-          <span className="eyebrow">Private homes · 40+ destinations</span>
-          <h1>
-            Stay somewhere
-            <br />
-            <em>truly extraordinary</em>
-          </h1>
-          <span className="flourish" aria-hidden="true" />
-          <p className="hero__lead">
-            Hand-picked villas <span className="dot" /> Verified in person <span className="dot" /> Hosted with care
-          </p>
-          <div className="hero__ctas">
-            <Link to="/stays" className="btn btn--primary btn--lg">
-              Explore stays <Icon name="arrow" size={18} />
-            </Link>
-            <Link to="/host" className="tour-link">
-              <span className="tour-link__ring"><Icon name="play" size={14} filled /></span>
-              List your home
-            </Link>
+      <section className="hero-wrap container">
+        <div className="hero">
+          <Img className="hero__bg" src={img('1600607687939-ce8a6c25118c', 2400)} alt="" />
+          {HERO_VIDEO && <video className="hero__video" src={HERO_VIDEO} autoPlay muted loop playsInline aria-hidden="true" />}
+          <div className="hero__scrim" />
+          <div className="hero__inner">
+            <span className="eyebrow">Private homes · 40+ destinations</span>
+            <h1>
+              Stay somewhere
+              <br />
+              <em>quietly extraordinary</em>
+            </h1>
+            <p className="hero__lead">Hand-picked villas, verified in person and hosted with care.</p>
+            <div className="hero__ctas">
+              <Link to="/stays" className="btn btn--primary btn--lg">
+                Explore stays <Icon name="arrow" size={18} />
+              </Link>
+              <Link to="/host" className="btn btn--glass btn--lg">
+                List your home
+              </Link>
+            </div>
           </div>
-          <SearchBar />
         </div>
+        <SearchBar />
       </section>
 
       <section className="section container">
         <SectionTitle title="Find your setting" />
-        <div className="settings">
-          {CATEGORIES.map((c) => (
-            <Link key={c.name} to={`/stays?category=${c.name}`} className="setting glass-card spot">
-              <span className="setting__icon"><Icon name={c.icon} size={30} strokeWidth={1.2} /></span>
-              <h3>{c.name}</h3>
-              <p>{SETTING_COPY[c.name]}</p>
-              <span className="glow-line" aria-hidden="true" />
+        <div className="cat-pills">
+          {CATEGORIES.map((c, i) => (
+            <Link key={c.name} to={`/stays?category=${c.name}`} className={`cat-pill cat-pill--${['sand', 'sage', 'clay', 'clear'][i % 4]}`}>
+              <Icon name={c.icon} size={20} strokeWidth={1.2} />
+              <span>
+                <strong>{c.name}</strong>
+                <small>{SETTING_COPY[c.name]}</small>
+              </span>
             </Link>
           ))}
         </div>

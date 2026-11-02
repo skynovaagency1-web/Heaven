@@ -30,7 +30,7 @@ npm run build    # production build in dist/
 | `/about`, `/contact` | Story, values and timeline; contact form with validation |
 | `/help` | Searchable FAQ by topic |
 | `/trust-safety`, `/cancellation` | Inspection process and stay guarantee; Flexible / Moderate / Strict refund tiers |
-| `/privacy`, `/terms`, `/sitemap` | Legal pages and a full sitemap |
+- Look: editorial magazine. Flat sand paper with fine grain, hairline rules instead of cards, very large Cormorant Garamond headlines, Jost body, Martian Mono only for small facts (prices, dates, ratings, section numbers). Glass is used only where something floats over a photo (search bar, host estimator, mobile bottom bar). Home is laid out as numbered sections: Stays (staggered), Places (index), The feature, a guest quote, Hosting. Set `HERO_VIDEO` in `src/brand.ts` to use a background video on the cover photo.
 | `/signin`, `/signup`, `/account` | Demo sign-in (stored in the browser only) and account hub |
 
 ## Notes

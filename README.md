@@ -41,4 +41,4 @@ npm run build    # production build in dist/
 - Photos load from Unsplash. If one fails, a warm gradient placeholder is shown.
 - SPA routing: `wrangler.jsonc` (Cloudflare) and `vercel.json` (Vercel).
 
-Deploys to Cloudflare Workers ("heaven") on every push to `main`.
+Deploys to Cloudflare Workers (project "heaven") on every push to `main`.

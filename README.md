@@ -40,3 +40,5 @@ npm run build    # production build in dist/
 - Data is mocked in `src/data/listings.ts`. Wishlist, trips and host listings persist in `localStorage`. Payments are a demo; nothing is charged.
 - Photos load from Unsplash. If one fails, a warm gradient placeholder is shown.
 - SPA routing: `wrangler.jsonc` (Cloudflare) and `vercel.json` (Vercel).
+
+Deploys to Cloudflare Workers ("heaven") on every push to `main`.

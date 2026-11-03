@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
 import SearchBar from '../components/SearchBar'
 import ListingCard from '../components/ListingCard'
+import PopCard from '../components/PopCard'
 import { Img } from '../components/ui'
 import { CATEGORIES, img } from '../data/listings'
 import { GUIDES } from '../data/destinations'
@@ -39,6 +40,13 @@ export default function Home() {
   const featureStay = listings.find((l) => l.city === feature.city)
   const q = QUOTES[quote]
   const arcItems = ranked.slice(0, 9)
+  const popItems = [
+    { id: 'villa-aurelia', cutout: '/popout/house-1.png' },
+    { id: 'mykonos-villa', cutout: '/popout/house-2.png' },
+    { id: 'bali-retreat', cutout: '/popout/house-3.png' },
+  ]
+    .map((p) => ({ listing: listings.find((l) => l.id === p.id), cutout: p.cutout }))
+    .filter((p): p is { listing: (typeof listings)[number]; cutout: string } => !!p.listing)
   const [center, setCenter] = useState(0)
 
   return (
@@ -118,6 +126,15 @@ export default function Home() {
           </button>
         </div>
       </section>
+
+      {/* Pop-out collection */}
+      {popItems.length > 0 && (
+        <section className="container pops" aria-label="Signature homes">
+          {popItems.map((p, i) => (
+            <PopCard key={p.listing.id} listing={p.listing} cutout={p.cutout} tilt={[-2, 0, 2][i] ?? 0} />
+          ))}
+        </section>
+      )}
 
       {/* 01 Stays */}
       <section className="container ed-section">

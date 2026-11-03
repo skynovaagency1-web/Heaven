@@ -6,6 +6,7 @@ import { getHost } from '../data/listings'
 import { useStore } from '../lib/store'
 import { cx, fmtDate, money, nightsBetween, priceBreakdown } from '../lib/utils'
 import NotFound from './NotFound'
+import { errorText } from '../lib/api'
 
 const fmtCard = (v: string) => v.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim()
 const fmtExp = (v: string) => {
@@ -17,7 +18,7 @@ export default function Checkout() {
   const { id = '' } = useParams()
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const { getListing, addTrip } = useStore()
+  const { getListing, addTrip, online } = useStore()
   const listing = getListing(id)
 
   const checkIn = params.get('checkIn')
@@ -30,7 +31,9 @@ export default function Checkout() {
   const [agree, setAgree] = useState(false)
   const [touched, setTouched] = useState(false)
   const [processing, setProcessing] = useState(false)
+  const [failure, setFailure] = useState('')
 
+  if (!listing && online === null) return <div className="container page-narrow center muted">Loading…</div>
   if (!listing) return <NotFound />
   if (!checkIn || !checkOut || nights <= 0) {
     return (
@@ -64,27 +67,31 @@ export default function Checkout() {
   const valid = Object.keys(errors).length === 0
   const err = (k: keyof typeof errors) => touched && errors[k] ? <span className="field__err">{errors[k]}</span> : null
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault()
     setTouched(true)
     if (!valid) return
     setProcessing(true)
-    const code = 'HV' + Math.random().toString(36).slice(2, 8).toUpperCase()
-    setTimeout(() => {
-      addTrip({
-        code,
+    setFailure('')
+    try {
+      // Card details stay in the browser: payments are not wired up yet.
+      const t = await addTrip({
         listingId: listing!.id,
         checkIn: checkIn!,
         checkOut: checkOut!,
         guests,
         total: price.total,
-        guestName: form.name,
-        email: form.email,
-        status: listing!.instantBook ? 'confirmed' : 'requested',
-        createdAt: new Date().toISOString(),
+        guestName: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        message: form.message.trim(),
+        instantBook: listing!.instantBook,
       })
-      navigate(`/trips?confirmed=${code}`)
-    }, 900)
+      navigate(`/trips?confirmed=${t.code}`)
+    } catch (err) {
+      setFailure(errorText(err))
+      setProcessing(false)
+    }
   }
 
   return (
@@ -187,6 +194,7 @@ export default function Checkout() {
             {err('agree')}
           </section>
 
+          {failure && <p className="field__err" role="alert">{failure}</p>}
           <button className="btn btn--primary btn--block btn--lg" type="submit" disabled={processing}>
             {processing ? <span className="spinner" /> : <Icon name="lock" size={18} />}
             {processing ? 'Processing…' : listing.instantBook ? `Confirm and pay ${money(pay === 'full' ? price.total : Math.round(price.total / 2))}` : 'Send booking request'}

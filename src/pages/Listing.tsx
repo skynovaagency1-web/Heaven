@@ -8,6 +8,7 @@ import { getHost, reviewsFor } from '../data/listings'
 import { useStore } from '../lib/store'
 import { blockedDates, cx, fmtDate, money, nightsBetween, priceBreakdown } from '../lib/utils'
 import NotFound from './NotFound'
+import { api } from '../lib/api'
 
 const AMENITY_ICONS: Record<string, string> = {
   'Private pool': 'wave',
@@ -29,7 +30,7 @@ export default function ListingPage() {
   const { id = '' } = useParams()
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
-  const { getListing, wishlist, toggleWish } = useStore()
+  const { getListing, wishlist, toggleWish, online } = useStore()
   const listing = getListing(id)
 
   const [checkIn, setCheckIn] = useState<string | null>(params.get('checkIn'))
@@ -40,7 +41,13 @@ export default function ListingPage() {
   const [lightbox, setLightbox] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
 
-  const blocked = useMemo(() => blockedDates(id), [id])
+  // Demo blackout dates plus nights already booked in the database.
+  const [bookedNights, setBookedNights] = useState<string[]>([])
+  useEffect(() => {
+    if (!online) return
+    api<{ nights: string[] }>(`/api/listings/${id}/booked`).then((r) => setBookedNights(r.nights)).catch(() => null)
+  }, [id, online])
+  const blocked = useMemo(() => new Set([...blockedDates(id), ...bookedNights]), [id, bookedNights])
 
   useEffect(() => {
     const q = new URLSearchParams(params)
@@ -63,6 +70,7 @@ export default function ListingPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [lightbox, listing])
 
+  if (!listing && online === null) return <div className="container page-narrow center muted">Loading…</div>
   if (!listing) return <NotFound />
 
   const host = getHost(listing.hostId)

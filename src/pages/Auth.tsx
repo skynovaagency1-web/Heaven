@@ -5,9 +5,10 @@ import { Img, Mark } from '../components/ui'
 import { img } from '../data/listings'
 import { useStore } from '../lib/store'
 import { BRAND } from '../brand'
+import { errorText } from '../lib/api'
 
 export default function Auth({ mode }: { mode: 'signin' | 'signup' }) {
-  const { signIn } = useStore()
+  const { signIn, signUp, online } = useStore()
   const nav = useNavigate()
   const [params] = useSearchParams()
   const next = params.get('next') || '/account'
@@ -17,8 +18,9 @@ export default function Auth({ mode }: { mode: 'signin' | 'signup' }) {
   const [pw, setPw] = useState('')
   const [show, setShow] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [busy, setBusy] = useState(false)
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault()
     const errs: Record<string, string> = {}
     if (isUp && !name.trim()) errs.name = 'Please enter your name'
@@ -26,9 +28,16 @@ export default function Auth({ mode }: { mode: 'signin' | 'signup' }) {
     if (pw.length < 8) errs.pw = 'At least 8 characters'
     setErrors(errs)
     if (Object.keys(errs).length) return
-    const fallback = email.split('@')[0].replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-    signIn({ name: isUp ? name.trim() : fallback, email, since: new Date().toISOString() })
-    nav(next, { replace: true })
+    setBusy(true)
+    try {
+      if (isUp) await signUp(name.trim(), email.trim(), pw)
+      else await signIn(email.trim(), pw)
+      nav(next, { replace: true })
+    } catch (err) {
+      setErrors({ form: errorText(err) })
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -62,7 +71,10 @@ export default function Auth({ mode }: { mode: 'signin' | 'signup' }) {
             </span>
             {errors.pw && <span className="field__err">{errors.pw}</span>}
           </label>
-          <button className="btn btn--primary btn--lg btn--block">{isUp ? 'Create account' : 'Sign in'}</button>
+          {errors.form && <p className="field__err" role="alert">{errors.form}</p>}
+          <button className="btn btn--primary btn--lg btn--block" disabled={busy}>
+            {busy ? 'One moment…' : isUp ? 'Create account' : 'Sign in'}
+          </button>
         </form>
         <p className="auth__switch">
           {isUp ? 'Already a member?' : 'New here?'}{' '}
@@ -70,7 +82,12 @@ export default function Auth({ mode }: { mode: 'signin' | 'signup' }) {
             {isUp ? 'Sign in' : 'Create an account'}
           </Link>
         </p>
-        <p className="auth__note">Demo only: no real account is created and nothing leaves your browser.</p>
+        {online === false && <p className="auth__note">Demo mode: no real account is created and nothing leaves your browser.</p>}
+        {online && isUp && (
+          <p className="auth__note">
+            By creating an account you agree to our <Link to="/terms">terms</Link> and <Link to="/privacy">privacy policy</Link>.
+          </p>
+        )}
       </div>
     </section>
   )

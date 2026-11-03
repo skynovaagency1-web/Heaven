@@ -22,12 +22,36 @@ const TERMS: Section[] = [
   { h: 'Liability', p: ['We work hard to make every stay safe and accurate, but we are not liable for losses caused by events outside our reasonable control.'] },
 ]
 
-export default function Legal({ kind }: { kind: 'privacy' | 'terms' }) {
-  const isPrivacy = kind === 'privacy'
-  const sections = isPrivacy ? PRIVACY : TERMS
+const COOKIES: Section[] = [
+  { h: 'What we store', p: [`${BRAND} uses one essential cookie, heaven_session, to keep you signed in. It is HttpOnly, sent only over HTTPS, and expires after 30 days or when you sign out.`, 'Your browser’s local storage remembers homes you save and bookings you make while signed out, so they are still there next time.'] },
+  { h: 'What we don’t use', p: ['We do not use advertising or cross-site tracking cookies. If we add analytics later, it will be off until you agree to it.'] },
+  { h: 'Third parties', p: ['Fonts load from Google Fonts and some photos from Unsplash. These services receive your IP address when your browser loads their files, as with any website.'] },
+  { h: 'Your choices', p: ['You can clear cookies and site data in your browser settings at any time. If you block the session cookie you will not be able to sign in.'] },
+]
+
+const NOTICE: Section[] = [
+  { h: 'Publisher', p: [`${BRAND} is published by [Company name], [legal form] with a share capital of [amount], registered at [registry and number], VAT [number].`, 'Registered office: [address]. Email: [email]. Phone: [phone].'] },
+  { h: 'Publication director', p: ['[Full name], [role].'] },
+  { h: 'Hosting', p: ['Cloudflare, Inc., 101 Townsend St, San Francisco, CA 94107, USA. www.cloudflare.com. Data is stored in Cloudflare D1 (database, Western Europe) and Cloudflare R2 (photos).'] },
+  { h: 'Intellectual property', p: ['The design, text, logo and code of this site belong to the publisher. Photos come from hosts or from Unsplash under its licence. Do not copy them without permission.'] },
+  { h: 'Disputes', p: ['If you have a complaint, contact us first and we will try to solve it. EU consumers can also use the European Commission’s online dispute resolution platform.'] },
+]
+
+const PAGES = {
+  privacy: { title: 'Privacy policy', lead: 'Your privacy matters to us. This policy explains what we collect, why, and the choices you have.', sections: PRIVACY },
+  terms: { title: 'Terms of service', lead: 'These terms explain how booking and hosting on our platform work. Please read them before you book.', sections: TERMS },
+  cookies: { title: 'Cookie policy', lead: 'We keep cookies to the minimum the site needs to work.', sections: COOKIES },
+  notice: { title: 'Legal notice', lead: 'Who publishes and hosts this website.', sections: NOTICE },
+} as const
+
+const OTHERS: [keyof typeof PAGES, string][] = [['privacy', '/privacy'], ['terms', '/terms'], ['cookies', '/cookies'], ['notice', '/legal-notice']]
+
+export default function Legal({ kind }: { kind: keyof typeof PAGES }) {
+  const page = PAGES[kind]
+  const sections = page.sections
   return (
     <>
-      <PageHero small eyebrow="Legal" title={isPrivacy ? 'Privacy policy' : 'Terms of service'}>
+      <PageHero small eyebrow="Legal" title={page.title}>
         Last updated 1 November 2026
       </PageHero>
       <section className="section container legal">
@@ -36,16 +60,12 @@ export default function Legal({ kind }: { kind: 'privacy' | 'terms' }) {
           {sections.map((s, i) => (
             <a key={s.h} href={`#s${i + 1}`}>{s.h}</a>
           ))}
-          <Link to={isPrivacy ? '/terms' : '/privacy'} className="text-link mt">
-            {isPrivacy ? 'Terms of service' : 'Privacy policy'}
-          </Link>
+          {OTHERS.filter(([k]) => k !== kind).map(([k, to], i) => (
+            <Link key={k} to={to} className={i === 0 ? 'text-link mt' : 'text-link'}>{PAGES[k].title}</Link>
+          ))}
         </nav>
         <div className="prose legal__body">
-          <p className="lead">
-            {isPrivacy
-              ? 'Your privacy matters to us. This policy explains what we collect, why, and the choices you have.'
-              : 'These terms explain how booking and hosting on our platform work. Please read them before you book.'}
-          </p>
+          <p className="lead">{page.lead}</p>
           {sections.map((s, i) => (
             <section key={s.h} id={`s${i + 1}`}>
               <h2>{i + 1}. {s.h}</h2>

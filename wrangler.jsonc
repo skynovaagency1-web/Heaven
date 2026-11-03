@@ -1,9 +1,46 @@
 {
-  // Cloudflare Workers static-assets deploy: `npm run build` then `npx wrangler deploy`.
+  // Cloudflare Workers: static site from ./dist plus the API in worker/index.ts.
+  // Build: `npm run build`, deploy: `npx wrangler deploy` (Workers Builds runs both on every push to main).
+  "$schema": "node_modules/wrangler/config-schema.json",
   "name": "heaven",
+  "main": "worker/index.ts",
   "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true },
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    // Only these paths reach the Worker first; everything else is served straight from the CDN.
+    "run_worker_first": ["/api/*", "/media/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "heaven-db",
+      "database_id": "f4d510e4-86cf-4f56-a726-5c933d3795e0",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "heaven-media"
+    }
+  ],
+  // Pull-request Previews (`wrangler preview`) use separate test resources so they never touch production data.
+  "previews": {
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_name": "heaven-db-preview",
+        "database_id": "8d107349-c459-47c7-afde-98aaa83f7e80"
+      }
+    ],
+    "r2_buckets": [
+      {
+        "binding": "MEDIA",
+        "bucket_name": "heaven-media-preview"
+      }
+    ]
   }
 }

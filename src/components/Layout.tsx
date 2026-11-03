@@ -65,7 +65,7 @@ function Footer() {
         <div className="footer__top">
           <div className="footer__brand">
             <Logo tone="light" />
-            <p>Hand-picked villas, chalets and city hideaways, each one inspected in person and hosted by people who care.</p>
+            <p>Private homes in twelve places, each one visited by us before it is offered to you.</p>
           </div>
           <div>
             <h4>Explore</h4>
@@ -104,6 +104,7 @@ function Footer() {
           </span>
         </div>
       </div>
+      <div className="footer__word" aria-hidden="true">{BRAND_LOWER}</div>
     </footer>
   )
 }

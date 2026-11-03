@@ -30,7 +30,7 @@ npm run build    # production build in dist/
 | `/about`, `/contact` | Story, values and timeline; contact form with validation |
 | `/help` | Searchable FAQ by topic |
 | `/trust-safety`, `/cancellation` | Inspection process and stay guarantee; Flexible / Moderate / Strict refund tiers |
-| `/privacy`, `/terms`, `/sitemap` | Legal pages and a full sitemap |
+- Look: editorial layout with liquid glass and a deep red palette (#9C0412, #740107, #520102, #3D0606, #340506) on warm sand. Home: full-photo cover with a huge centred serif wordmark and a small pill CTA, a curved photo carousel, numbered sections (Stays, Places index, The feature with the city name set behind the photo, a guest quote, Hosting with curved image panels). Glossy tinted glass pills and round buttons, glass cards, red-black footer with an oversized wordmark. Set `HERO_VIDEO` in `src/brand.ts` to use a background video on the cover.
 | `/signin`, `/signup`, `/account` | Demo sign-in (stored in the browser only) and account hub |
 
 ## Notes

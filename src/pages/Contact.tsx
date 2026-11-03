@@ -3,24 +3,35 @@ import Icon from '../components/Icon'
 import PageHero from '../components/PageHero'
 import { useStore } from '../lib/store'
 import { BRAND_LOWER } from '../brand'
+import { errorText } from '../lib/api'
 
 const TOPICS = ['Planning a stay', 'An existing booking', 'Listing my home', 'Press & partnerships', 'Something else']
 
 export default function Contact() {
-  const { user } = useStore()
+  const { user, sendMessage } = useStore()
   const [form, setForm] = useState({ name: user?.name ?? '', email: user?.email ?? '', topic: TOPICS[0], message: '' })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [sent, setSent] = useState(false)
+  const [busy, setBusy] = useState(false)
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value })
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault()
     const errs: Record<string, string> = {}
     if (!form.name.trim()) errs.name = 'Please tell us your name'
     if (!/^\S+@\S+\.\S+$/.test(form.email)) errs.email = 'Enter a valid email'
     if (form.message.trim().length < 10) errs.message = 'A few more words, please'
     setErrors(errs)
-    if (!Object.keys(errs).length) setSent(true)
+    if (Object.keys(errs).length) return
+    setBusy(true)
+    try {
+      await sendMessage({ kind: 'contact', name: form.name.trim(), email: form.email.trim(), topic: form.topic, body: form.message.trim() })
+      setSent(true)
+    } catch (err) {
+      setErrors({ form: errorText(err) })
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -67,7 +78,8 @@ export default function Contact() {
                     {errors.message && <span className="field__err">{errors.message}</span>}
                   </label>
                 </div>
-                <button className="btn btn--primary btn--lg mt">Send message <Icon name="arrow" size={18} /></button>
+                {errors.form && <p className="field__err" role="alert">{errors.form}</p>}
+                <button className="btn btn--primary btn--lg mt" disabled={busy}>{busy ? 'Sending…' : 'Send message'} <Icon name="arrow" size={18} /></button>
               </form>
             )}
           </div>

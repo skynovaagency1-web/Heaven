@@ -6777,3 +6777,9 @@ h3 em {
     margin: 0 18px;
   }
 }
+
+/* ---------- Cloudflare-backed bits ---------- */
+.is-disabled { opacity: 0.5; pointer-events: none; }
+.find-booking { margin-top: 2.5rem; display: grid; gap: 0.6rem; max-width: 640px; }
+.find-booking input { flex: 1 1 180px; min-width: 0; padding: 0.7rem 1rem; border-radius: 999px; border: 1px solid var(--line, rgba(0,0,0,.15)); background: rgba(255,255,255,.6); font: inherit; }
+label.btn input[type='file'] { display: none; }

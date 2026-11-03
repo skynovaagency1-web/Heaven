@@ -6,13 +6,16 @@ import { getHost } from '../data/listings'
 import { useStore } from '../lib/store'
 import NotFound from './NotFound'
 import { useState } from 'react'
+import { errorText } from '../lib/api'
 
 export default function HostProfile() {
   const { id = '' } = useParams()
   const host = getHost(id)
-  const { listings } = useStore()
+  const { listings, user, sendMessage } = useStore()
   const [sent, setSent] = useState(false)
   const [msg, setMsg] = useState('')
+  const [email, setEmail] = useState('')
+  const [err, setErr] = useState('')
   if (!host) return <NotFound />
   const theirs = listings.filter((l) => l.hostId === host.id)
   const reviews = theirs.reduce((s, l) => s + l.reviewCount, 0)
@@ -46,9 +49,25 @@ export default function HostProfile() {
           {sent ? (
             <p className="accent-text"><Icon name="check" size={16} /> Message sent. {host.name.split(' ')[0]} usually replies {host.responseTime}.</p>
           ) : (
-            <form className="row gap-sm wrap" onSubmit={(e) => { e.preventDefault(); if (msg.trim()) setSent(true) }}>
+            <form
+              className="row gap-sm wrap"
+              onSubmit={async (e) => {
+                e.preventDefault()
+                if (!msg.trim()) return
+                const from = user?.email ?? email.trim()
+                if (!/^\S+@\S+\.\S+$/.test(from)) return setErr('Add your email so the host can reply')
+                try {
+                  await sendMessage({ kind: 'host', hostId: host.id, name: user?.name ?? from.split('@')[0], email: from, body: msg.trim() })
+                  setSent(true)
+                } catch (x) {
+                  setErr(errorText(x))
+                }
+              }}
+            >
               <input className="input grow" value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Ask about availability, events or special requests…" />
+              {!user && <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Your email" aria-label="Your email" />}
               <button className="btn btn--primary" type="submit">Send</button>
+              {err && <span className="field__err">{err}</span>}
             </form>
           )}
         </div>

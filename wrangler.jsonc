@@ -26,5 +26,21 @@
       "binding": "MEDIA",
       "bucket_name": "heaven-media"
     }
-  ]
+  ],
+  // Pull-request Previews (`wrangler preview`) use separate test resources so they never touch production data.
+  "previews": {
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_name": "heaven-db-preview",
+        "database_id": "8d107349-c459-47c7-afde-98aaa83f7e80"
+      }
+    ],
+    "r2_buckets": [
+      {
+        "binding": "MEDIA",
+        "bucket_name": "heaven-media-preview"
+      }
+    ]
+  }
 }

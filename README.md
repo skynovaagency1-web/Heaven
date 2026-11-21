@@ -42,3 +42,35 @@ npm run build    # production build in dist/
 - SPA routing: `wrangler.jsonc` (Cloudflare) and `vercel.json` (Vercel).
 
 Deploys to Cloudflare Workers (project "heaven") on every push to `main`.
+
+## Backend and payments
+
+The site runs in two modes:
+
+- **Demo mode** (no env vars): accounts, trips and saved homes live in the visitor's browser and checkout is simulated.
+- **Live mode**: Supabase handles accounts and the database, and Stripe Checkout takes payments.
+
+### Setup
+
+1. **Database.** Create a Supabase project and run the SQL files in `supabase/migrations/` in order. They create profiles, homes, bookings and wishlists, with row-level security. `scripts/seed-listings.ts` regenerates the homes seed from `src/data/listings.ts`.
+2. **Functions.** Deploy `supabase/functions/create-checkout` with JWT verification on. Deploy `supabase/functions/stripe-webhook` with JWT verification off, because it is authenticated by the Stripe signature instead.
+3. **Function secrets.** In Supabase, under Edge Functions → Secrets, set:
+   - `STRIPE_SECRET_KEY`: `sk_test_…` while testing.
+   - `STRIPE_WEBHOOK_SECRET`: `whsec_…`, from the webhook endpoint below.
+   - `SITE_URL`: `https://heaven.skynovaagency.workers.dev`.
+4. **Stripe webhook.** In Stripe, under Developers → Webhooks, add `https://<project>.supabase.co/functions/v1/stripe-webhook` with these events: `checkout.session.completed`, `checkout.session.expired`, `checkout.session.async_payment_succeeded` and `checkout.session.async_payment_failed`.
+5. **Site.** In Cloudflare, under Settings → Build → Variables, set `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY`, then redeploy.
+6. **Auth emails.** In Supabase, under Authentication → URL Configuration, set the Site URL to the live site.
+
+### How a booking works
+
+1. The guest signs in, and `create-checkout` prices the stay from the `listings` table, so the browser can't change the price.
+2. The function checks the dates are free, creates a `pending` booking that holds the dates for 30 minutes, and redirects to Stripe.
+3. The webhook then marks the booking `confirmed` (instant book) or `requested`, or `expired` if the guest doesn't pay.
+
+### Not built yet
+
+- Host payouts (Stripe Connect).
+- Charging the 50% balance 14 days before check-in.
+- Automatic refunds on cancellation.
+- Storing host-created homes in the database (the host tools are still browser-only).

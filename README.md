@@ -24,7 +24,7 @@ npm run dev:cf            # full stack (site + API + local D1/R2), http://localh
 
 What the API stores in D1: accounts (PBKDF2 passwords, HttpOnly session cookie), listings hosts publish, bookings (server-side price and double-booking check), wishlists, contact and host messages. Schema: `migrations/`.
 
-- Pushing to `main` builds and deploys through Workers Builds.
+- Pushing to `main` builds and deploys through Workers Builds. Build command `npm run build` must be set for both Production and Previews Base (Settings → Build), because `wrangler deploy` / `wrangler preview` need `dist/`.
 - New migration: add `migrations/000N_name.sql`, then `npm run db:migrate` (needs `wrangler login`).
 - Read data: Cloudflare dashboard → Storage & Databases → D1 → heaven-db → Console, e.g. `SELECT * FROM bookings ORDER BY created_at DESC`.
 - If the API is not reachable (plain `vite dev`), the site falls back to browser storage so the demo still works.

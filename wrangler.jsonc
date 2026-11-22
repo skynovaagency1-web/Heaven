@@ -6,6 +6,9 @@
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-01",
   "observability": { "enabled": true },
+  // Wrangler runs this before every deploy/preview, so dist/ exists even when the
+  // Cloudflare dashboard has no build command set (e.g. for PR preview builds).
+  "build": { "command": "npm run build" },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

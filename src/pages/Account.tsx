@@ -4,9 +4,8 @@ import { useStore } from '../lib/store'
 import { fmtDate } from '../lib/utils'
 
 export default function Account() {
-  const { user, ready, signOut, trips, wishlist } = useStore()
+  const { user, signOut, trips, wishlist } = useStore()
   const nav = useNavigate()
-  if (!ready) return null
   if (!user) return <Navigate to="/signin?next=/account" replace />
 
   const tiles = [
@@ -26,7 +25,7 @@ export default function Account() {
           <h1>{user.name}</h1>
           <p className="muted">{user.email} · Member since {fmtDate(user.since.slice(0, 10), { month: 'long', year: 'numeric' })}</p>
         </div>
-        <button className="btn btn--ghost" onClick={async () => { await signOut(); nav('/') }}>Sign out</button>
+        <button className="btn btn--ghost" onClick={() => { signOut(); nav('/') }}>Sign out</button>
       </div>
       <div className="shortcuts shortcuts--3">
         {tiles.map((t) => (

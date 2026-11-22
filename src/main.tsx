@@ -55,6 +55,8 @@ createRoot(document.getElementById('root')!).render(
             <Route path="cancellation" element={<Cancellation />} />
             <Route path="privacy" element={<Legal kind="privacy" />} />
             <Route path="terms" element={<Legal kind="terms" />} />
+            <Route path="cookies" element={<Legal kind="cookies" />} />
+            <Route path="legal-notice" element={<Legal kind="notice" />} />
             <Route path="signin" element={<Auth mode="signin" />} />
             <Route path="signup" element={<Auth mode="signup" />} />
             <Route path="account" element={<Account />} />

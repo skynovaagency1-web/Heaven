@@ -5,9 +5,10 @@ import { Img, Mark } from '../components/ui'
 import { img } from '../data/listings'
 import { useStore } from '../lib/store'
 import { BRAND } from '../brand'
+import { errorText } from '../lib/api'
 
 export default function Auth({ mode }: { mode: 'signin' | 'signup' }) {
-  const { login, register, live } = useStore()
+  const { signIn, signUp, online } = useStore()
   const nav = useNavigate()
   const [params] = useSearchParams()
   const next = params.get('next') || '/account'
@@ -18,7 +19,6 @@ export default function Auth({ mode }: { mode: 'signin' | 'signup' }) {
   const [show, setShow] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState(false)
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -29,11 +29,15 @@ export default function Auth({ mode }: { mode: 'signin' | 'signup' }) {
     setErrors(errs)
     if (Object.keys(errs).length) return
     setBusy(true)
-    const err = isUp ? await register(name.trim(), email.trim(), pw) : await login(email.trim(), pw)
-    setBusy(false)
-    if (err === 'CHECK_EMAIL') return setSent(true)
-    if (err) return setErrors({ form: err })
-    nav(next, { replace: true })
+    try {
+      if (isUp) await signUp(name.trim(), email.trim(), pw)
+      else await signIn(email.trim(), pw)
+      nav(next, { replace: true })
+    } catch (err) {
+      setErrors({ form: errorText(err) })
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -44,11 +48,6 @@ export default function Auth({ mode }: { mode: 'signin' | 'signup' }) {
         <span className="auth__mark"><Mark size={40} /></span>
         <h1>{isUp ? `Join ${BRAND}` : 'Welcome back'}</h1>
         <p className="muted">{isUp ? 'Save homes, book faster and reach the concierge.' : 'Sign in to see your trips and saved homes.'}</p>
-        {sent ? (
-          <p className="auth__sent">
-            Check <strong>{email}</strong> for a link to confirm your account, then come back to sign in.
-          </p>
-        ) : (
         <form onSubmit={submit} noValidate>
           {isUp && (
             <label className="field field--full">
@@ -72,19 +71,23 @@ export default function Auth({ mode }: { mode: 'signin' | 'signup' }) {
             </span>
             {errors.pw && <span className="field__err">{errors.pw}</span>}
           </label>
-          {errors.form && <p className="field__err">{errors.form}</p>}
+          {errors.form && <p className="field__err" role="alert">{errors.form}</p>}
           <button className="btn btn--primary btn--lg btn--block" disabled={busy}>
-            {busy ? <span className="spinner" /> : isUp ? 'Create account' : 'Sign in'}
+            {busy ? 'One moment…' : isUp ? 'Create account' : 'Sign in'}
           </button>
         </form>
-        )}
         <p className="auth__switch">
           {isUp ? 'Already a member?' : 'New here?'}{' '}
           <Link to={`${isUp ? '/signin' : '/signup'}${params.get('next') ? `?next=${encodeURIComponent(next)}` : ''}`} className="text-link">
             {isUp ? 'Sign in' : 'Create an account'}
           </Link>
         </p>
-        {!live && <p className="auth__note">Demo only: no real account is created and nothing leaves your browser.</p>}
+        {online === false && <p className="auth__note">Demo mode: no real account is created and nothing leaves your browser.</p>}
+        {online && isUp && (
+          <p className="auth__note">
+            By creating an account you agree to our <Link to="/terms">terms</Link> and <Link to="/privacy">privacy policy</Link>.
+          </p>
+        )}
       </div>
     </section>
   )

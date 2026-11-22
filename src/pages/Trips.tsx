@@ -1,50 +1,59 @@
-import { useEffect } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { Img } from '../components/ui'
 import { useStore } from '../lib/store'
 import { fmtDate, money, nightsBetween, toISO } from '../lib/utils'
+import { api, errorText } from '../lib/api'
+import type { Trip } from '../lib/store'
+
+/** Guests who booked without an account can find a booking with its code and email. */
+function FindBooking() {
+  const { rememberTrip } = useStore()
+  const [code, setCode] = useState('')
+  const [email, setEmail] = useState('')
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    setMsg('')
+    try {
+      const { trip } = await api<{ trip: Trip }>(`/api/bookings/lookup?code=${encodeURIComponent(code.trim())}&email=${encodeURIComponent(email.trim())}`)
+      if (trip.status === 'cancelled') setMsg('This booking was cancelled.')
+      else rememberTrip(trip)
+    } catch (err) {
+      setMsg(errorText(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <form className="panel find-booking" onSubmit={submit}>
+      <h2 className="subhead">Find a booking</h2>
+      <p className="muted small">Booked without an account? Enter your confirmation code and the email you used.</p>
+      <div className="row gap-sm wrap">
+        <input aria-label="Confirmation code" placeholder="HVXXXXXX" value={code} onChange={(e) => setCode(e.target.value)} required />
+        <input aria-label="Email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <button className="btn btn--ghost" disabled={busy}>{busy ? 'Searching…' : 'Find booking'}</button>
+      </div>
+      {msg && <p className="field__err" role="alert">{msg}</p>}
+    </form>
+  )
+}
 
 export default function Trips() {
-  const { trips, getListing, cancelTrip, refreshTrips, live } = useStore()
+  const { trips, getListing, cancelTrip, online, user } = useStore()
   const [params] = useSearchParams()
   const confirmed = params.get('confirmed')
   const justBooked = trips.find((t) => t.code === confirmed)
-  const waiting = live && !!confirmed && (!justBooked || justBooked.status === 'pending')
-
-  // After Stripe sends the guest back, the webhook can take a few seconds to mark the booking paid.
-  useEffect(() => {
-    if (!waiting) return
-    let n = 0
-    const t = setInterval(() => {
-      n += 1
-      refreshTrips()
-      if (n >= 10) clearInterval(t)
-    }, 2000)
-    return () => clearInterval(t)
-  }, [waiting, refreshTrips])
-
-  const cancel = async (code: string) => {
-    if (!confirm('Cancel this reservation?')) return
-    const err = await cancelTrip(code)
-    if (err) alert(err)
-  }
   const today = toISO(new Date())
   const upcoming = trips.filter((t) => t.checkOut >= today)
   const past = trips.filter((t) => t.checkOut < today)
 
   return (
     <div className="container page">
-      {waiting && (
-        <div className="confirm-banner">
-          <span className="spinner" />
-          <div>
-            <h2>Confirming your payment…</h2>
-            <p>This takes a few seconds. Your confirmation code is <strong>{confirmed}</strong>.</p>
-          </div>
-        </div>
-      )}
-      {justBooked && !waiting && (
+      {justBooked && (
         <div className="confirm-banner">
           <span className="confirm-banner__icon"><Icon name="check" size={26} strokeWidth={2} /></span>
           <div>
@@ -52,9 +61,7 @@ export default function Trips() {
             <p>
               {justBooked.status === 'confirmed'
                 ? `Your reservation is confirmed. A receipt is on its way to ${justBooked.email}.`
-                : live
-                  ? 'The host usually responds within a few hours. If they decline, you get a full refund.'
-                  : 'The host usually responds within a few hours. You won’t be charged until they accept.'}{' '}
+                : 'The host usually responds within a few hours. You won’t be charged until they accept.'}{' '}
               Confirmation code <strong>{justBooked.code}</strong>.
             </p>
           </div>
@@ -84,7 +91,7 @@ export default function Trips() {
                       <article key={t.code} className="trip">
                         <Link to={`/stays/${l.id}`} className="trip__img"><Img src={l.images[0]} alt="" /></Link>
                         <div className="trip__body">
-                          <span className={`status status--${t.status}`}>{t.status === 'confirmed' ? 'Confirmed' : t.status === 'pending' ? 'Payment pending' : 'Awaiting host'}</span>
+                          <span className={`status status--${t.status}`}>{t.status === 'confirmed' ? 'Confirmed' : 'Awaiting host'}</span>
                           <h3><Link to={`/stays/${l.id}`}>{l.title}</Link></h3>
                           <p className="muted">{l.city}, {l.country}</p>
                           <p>
@@ -92,7 +99,7 @@ export default function Trips() {
                           </p>
                           <div className="trip__foot">
                             <span><strong>{money(t.total)}</strong> <span className="muted">· {t.code}</span></span>
-                            <button className="link-btn danger" onClick={() => cancel(t.code)}>Cancel</button>
+                            <button className="link-btn danger" onClick={() => confirm('Cancel this reservation?') && cancelTrip(t.code).catch((e) => alert(errorText(e)))}>Cancel</button>
                           </div>
                         </div>
                       </article>
@@ -104,6 +111,8 @@ export default function Trips() {
           )}
         </>
       )}
+
+      {online && !user && <FindBooking />}
     </div>
   )
 }

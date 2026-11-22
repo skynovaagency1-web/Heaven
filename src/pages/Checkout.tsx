@@ -3,9 +3,10 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { Img, Stars } from '../components/ui'
 import { getHost } from '../data/listings'
-import { startCheckout, useStore } from '../lib/store'
+import { useStore } from '../lib/store'
 import { cx, fmtDate, money, nightsBetween, priceBreakdown } from '../lib/utils'
 import NotFound from './NotFound'
+import { errorText } from '../lib/api'
 
 const fmtCard = (v: string) => v.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim()
 const fmtExp = (v: string) => {
@@ -17,8 +18,7 @@ export default function Checkout() {
   const { id = '' } = useParams()
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const { getListing, addTrip, live, user, ready } = useStore()
-  const [payError, setPayError] = useState('')
+  const { getListing, addTrip, online } = useStore()
   const listing = getListing(id)
 
   const checkIn = params.get('checkIn')
@@ -31,7 +31,9 @@ export default function Checkout() {
   const [agree, setAgree] = useState(false)
   const [touched, setTouched] = useState(false)
   const [processing, setProcessing] = useState(false)
+  const [failure, setFailure] = useState('')
 
+  if (!listing && online === null) return <div className="container page-narrow center muted">Loading…</div>
   if (!listing) return <NotFound />
   if (!checkIn || !checkOut || nights <= 0) {
     return (
@@ -39,20 +41,6 @@ export default function Checkout() {
         <h1>Choose your dates first</h1>
         <p className="muted">Pick check-in and check-out dates to continue to booking.</p>
         <Link to={`/stays/${listing.id}`} className="btn btn--primary mt">Back to {listing.title}</Link>
-      </div>
-    )
-  }
-
-  if (live && ready && !user) {
-    const here = `/book/${listing.id}?${params}`
-    return (
-      <div className="container page-narrow center">
-        <h1>Sign in to book</h1>
-        <p className="muted">You need an account to book {listing.title}, so your trip and receipt are saved for you.</p>
-        <div className="row gap wrap center mt">
-          <Link to={`/signin?next=${encodeURIComponent(here)}`} className="btn btn--primary">Sign in</Link>
-          <Link to={`/signup?next=${encodeURIComponent(here)}`} className="btn btn--outline">Create an account</Link>
-        </div>
       </div>
     )
   }
@@ -71,50 +59,39 @@ export default function Checkout() {
   if (form.name.trim().length < 2) errors.name = 'Enter your full name'
   if (!/^\S+@\S+\.\S+$/.test(form.email)) errors.email = 'Enter a valid email'
   if (form.phone.replace(/\D/g, '').length < 7) errors.phone = 'Enter a phone number'
-  if (!live) {
-    if (form.card.replace(/\s/g, '').length < 15) errors.card = 'Enter a valid card number'
-    if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(form.exp)) errors.exp = 'MM/YY'
-    if (form.cvc.length < 3) errors.cvc = 'CVC'
-  }
+  if (form.card.replace(/\s/g, '').length < 15) errors.card = 'Enter a valid card number'
+  if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(form.exp)) errors.exp = 'MM/YY'
+  if (form.cvc.length < 3) errors.cvc = 'CVC'
   if (!listing.instantBook && form.message.trim().length < 10) errors.message = 'Introduce yourself to the host'
   if (!agree) errors.agree = 'Please accept the house rules and policy'
   const valid = Object.keys(errors).length === 0
   const err = (k: keyof typeof errors) => touched && errors[k] ? <span className="field__err">{errors[k]}</span> : null
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault()
     setTouched(true)
     if (!valid) return
     setProcessing(true)
-    if (live) {
-      setPayError('')
-      startCheckout({
-        listingId: listing!.id, checkIn: checkIn!, checkOut: checkOut!, guests, pay,
-        name: form.name.trim(), email: form.email.trim(), phone: form.phone.trim(), message: form.message.trim(),
-      })
-        .then((url) => window.location.assign(url))
-        .catch((e: Error) => {
-          setPayError(e.message)
-          setProcessing(false)
-        })
-      return
-    }
-    const code = 'HV' + Math.random().toString(36).slice(2, 8).toUpperCase()
-    setTimeout(() => {
-      addTrip({
-        code,
+    setFailure('')
+    try {
+      // Card details stay in the browser: payments are not wired up yet.
+      const t = await addTrip({
         listingId: listing!.id,
         checkIn: checkIn!,
         checkOut: checkOut!,
         guests,
         total: price.total,
-        guestName: form.name,
-        email: form.email,
-        status: listing!.instantBook ? 'confirmed' : 'requested',
-        createdAt: new Date().toISOString(),
+        guestName: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        message: form.message.trim(),
+        instantBook: listing!.instantBook,
       })
-      navigate(`/trips?confirmed=${code}`)
-    }, 900)
+      navigate(`/trips?confirmed=${t.code}`)
+    } catch (err) {
+      setFailure(errorText(err))
+      setProcessing(false)
+    }
   }
 
   return (
@@ -181,10 +158,6 @@ export default function Checkout() {
 
           <section className="panel">
             <h2>Payment <span className="secure"><Icon name="lock" size={14} /> Secure checkout</span></h2>
-{live ? (
-              <p className="muted">Next you’ll pay securely with Stripe. Card details never touch our servers.</p>
-            ) : (
-              <>
             <div className="fields">
               <label className="field field--full">
                 <span>Card number</span>
@@ -206,8 +179,6 @@ export default function Checkout() {
               </label>
             </div>
             <p className="muted small">Demo checkout. No real payment is processed.</p>
-              </>
-            )}
           </section>
 
           <section className="panel">
@@ -223,12 +194,12 @@ export default function Checkout() {
             {err('agree')}
           </section>
 
+          {failure && <p className="field__err" role="alert">{failure}</p>}
           <button className="btn btn--primary btn--block btn--lg" type="submit" disabled={processing}>
             {processing ? <span className="spinner" /> : <Icon name="lock" size={18} />}
-            {processing ? (live ? 'Opening secure payment…' : 'Processing…') : listing.instantBook ? `Confirm and pay ${money(pay === 'full' ? price.total : Math.round(price.total / 2))}` : 'Send booking request'}
+            {processing ? 'Processing…' : listing.instantBook ? `Confirm and pay ${money(pay === 'full' ? price.total : Math.round(price.total / 2))}` : 'Send booking request'}
           </button>
           {touched && !valid && <p className="field__err center">Please fix the highlighted fields.</p>}
-          {payError && <p className="field__err center">{payError}</p>}
         </form>
 
         <aside className="summary">

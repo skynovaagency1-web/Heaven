@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { Img } from '../components/ui'
 import { getHost, LISTINGS } from '../data/listings'
-import { useStore } from '../lib/store'
+import { useStore, type Trip } from '../lib/store'
+import { api, errorText } from '../lib/api'
 import { addDays, cx, fmtDate, money, toISO } from '../lib/utils'
 
 const HOST_ID = 'h1'
@@ -13,7 +14,12 @@ const EARNINGS = [18, 22, 26, 31, 38, 52, 64, 68, 49, 36, 24, 29].map((k) => k *
 const GUESTS = ['Charlotte W.', 'Marcus D.', 'Elena R.', 'James T.', 'Priya S.']
 
 export default function HostDashboard() {
-  const { customListings, paused, togglePaused, removeListing, trips } = useStore()
+  const { customListings, paused, togglePaused, removeListing, trips, online, user } = useStore()
+  const [booked, setBooked] = useState<Trip[]>([])
+  useEffect(() => {
+    if (!online || !user) return
+    api<{ reservations: Trip[] }>('/api/host/reservations').then((r) => setBooked(r.reservations)).catch(() => null)
+  }, [online, user])
   const host = getHost(HOST_ID)!
   const [tab, setTab] = useState<'upcoming' | 'listings'>('upcoming')
   const mine = [...customListings, ...LISTINGS.filter((l) => l.hostId === HOST_ID)]
@@ -30,7 +36,7 @@ export default function HostDashboard() {
     total: l.price * 4 + l.cleaningFee,
     status: i === 1 ? 'requested' : 'confirmed',
   }))
-  const real = trips
+  const real = [...booked, ...trips.filter((t) => !booked.some((b) => b.code === t.code))]
     .map((t) => ({ t, l: mine.find((l) => l.id === t.listingId) }))
     .filter((x) => x.l)
     .map(({ t, l }) => ({ code: t.code, guest: t.guestName, listing: l!, checkIn: t.checkIn, checkOut: t.checkOut, total: t.total, status: t.status }))
@@ -133,7 +139,7 @@ export default function HostDashboard() {
                   <Link to={`/stays/${l.id}`} className="icon-btn" aria-label="View"><Icon name="eye" size={18} /></Link>
                   <button className="btn btn--outline btn--sm" onClick={() => togglePaused(l.id)}>{isPaused ? 'Activate' : 'Pause'}</button>
                   {l.custom && (
-                    <button className="icon-btn danger" aria-label="Delete listing" onClick={() => confirm('Delete this listing?') && removeListing(l.id)}>
+                    <button className="icon-btn danger" aria-label="Delete listing" onClick={() => confirm('Delete this listing?') && removeListing(l.id).catch((e) => alert(errorText(e)))}>
                       <Icon name="trash" size={18} />
                     </button>
                   )}

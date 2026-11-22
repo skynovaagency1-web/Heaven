@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { Counter, Img } from '../components/ui'
 import { AMENITIES, CATEGORIES, PROPERTY_TYPES, img, type Category, type Listing, type PropertyType } from '../data/listings'
 import { useStore } from '../lib/store'
 import { cx, money } from '../lib/utils'
+import { errorText } from '../lib/api'
 
 const PHOTO_LIBRARY = [
   '1600596542815-ffad4c1539a9',
@@ -20,9 +21,12 @@ const PHOTO_LIBRARY = [
 const STEPS = ['Basics', 'Location', 'Details', 'Photos', 'Pricing']
 
 export default function NewListing() {
-  const { addListing } = useStore()
+  const { addListing, uploadPhoto, online, user } = useStore()
   const navigate = useNavigate()
   const [step, setStep] = useState(0)
+  const [uploading, setUploading] = useState(0)
+  const [publishing, setPublishing] = useState(false)
+  const [problem, setProblem] = useState('')
   const [d, setD] = useState({
     title: '',
     tagline: '',
@@ -51,7 +55,29 @@ export default function NewListing() {
     d.price >= 50,
   ]
 
-  function publish() {
+  async function addFiles(files: FileList | null) {
+    if (!files) return
+    const room = 5 - d.images.length
+    const picked = Array.from(files).slice(0, room)
+    setProblem('')
+    setUploading((n) => n + picked.length)
+    for (const f of picked) {
+      try {
+        if (f.size > 8 * 1024 * 1024) throw new Error(`${f.name} is larger than 8 MB`)
+        const url = await uploadPhoto(f)
+        setD((cur) => ({ ...cur, images: cur.images.length < 5 ? [...cur.images, url] : cur.images }))
+      } catch (e) {
+        setProblem(errorText(e))
+      } finally {
+        setUploading((n) => n - 1)
+      }
+    }
+  }
+
+  // Listings are saved to the host's account, so ask them to sign in first.
+  if (online && !user) return <Navigate to="/signin?next=/host/new" replace />
+
+  async function publish() {
     const id = `${d.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${Date.now().toString(36)}`
     const listing: Listing = {
       ...d,
@@ -68,8 +94,15 @@ export default function NewListing() {
       ],
       custom: true,
     }
-    addListing(listing)
-    navigate(`/stays/${id}`)
+    setPublishing(true)
+    setProblem('')
+    try {
+      const saved = await addListing(listing)
+      navigate(`/stays/${saved.id}`)
+    } catch (e) {
+      setProblem(errorText(e))
+      setPublishing(false)
+    }
   }
 
   return (
@@ -149,7 +182,22 @@ export default function NewListing() {
         {step === 3 && (
           <>
             <h2>Add photos and a description</h2>
-            <p className="muted">Pick up to five photos for the demo. Selected: {d.images.length}/5</p>
+            <p className="muted">Upload up to five photos of your home (JPEG, PNG or WebP, 8 MB max), or pick from our library. Selected: {d.images.length}/5</p>
+            <label className={cx('btn btn--outline mt', d.images.length >= 5 && 'is-disabled')}>
+              <Icon name="plus" size={18} /> {uploading ? `Uploading ${uploading}…` : 'Upload photos'}
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple hidden disabled={d.images.length >= 5} onChange={(e) => { addFiles(e.target.files); e.target.value = '' }} />
+            </label>
+            {d.images.some((src) => !PHOTO_LIBRARY.includes(src)) && (
+              <div className="photo-pick mt">
+                {d.images.filter((src) => !PHOTO_LIBRARY.includes(src)).map((src) => (
+                  <button key={src} type="button" className="photo-pick__item is-on" onClick={() => set('images', d.images.filter((x) => x !== src))} aria-label="Remove photo">
+                    <Img src={src} alt="" />
+                    <span className="photo-pick__tick"><Icon name="check" size={14} strokeWidth={2.4} /></span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <h4 className="mt">Photo library</h4>
             <div className="photo-pick">
               {PHOTO_LIBRARY.map((src) => {
                 const on = d.images.includes(src)
@@ -196,12 +244,13 @@ export default function NewListing() {
         )}
       </div>
 
+      {problem && <p className="field__err" role="alert">{problem}</p>}
       <div className="wizard__nav">
         <button className="btn btn--ghost" disabled={step === 0} onClick={() => setStep(step - 1)}>Back</button>
         {step < STEPS.length - 1 ? (
           <button className="btn btn--primary" disabled={!ok[step]} onClick={() => setStep(step + 1)}>Continue <Icon name="arrow" size={18} /></button>
         ) : (
-          <button className="btn btn--primary" disabled={!ok.every(Boolean)} onClick={publish}><Icon name="check" size={18} /> Publish listing</button>
+          <button className="btn btn--primary" disabled={!ok.every(Boolean) || publishing || uploading > 0} onClick={publish}><Icon name="check" size={18} /> {publishing ? 'Publishing…' : 'Publish listing'}</button>
         )}
       </div>
     </div>

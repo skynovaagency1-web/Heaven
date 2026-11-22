@@ -100,7 +100,7 @@ function Footer() {
           <span>© {new Date().getFullYear()} {BRAND}. All rights reserved.</span>
           <span className="footer__mark"><Mark size={16} /> {BRAND_LOWER}</span>
           <span className="footer__legal">
-            <Link to="/privacy">Privacy</Link> · <Link to="/terms">Terms</Link> · <Link to="/sitemap">Sitemap</Link>
+            <Link to="/privacy">Privacy</Link> · <Link to="/terms">Terms</Link> · <Link to="/cookies">Cookies</Link> · <Link to="/legal-notice">Legal notice</Link> · <Link to="/sitemap">Sitemap</Link>
           </span>
         </div>
       </div>

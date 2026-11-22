@@ -1,11 +1,49 @@
+import { useState, type FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { Img } from '../components/ui'
 import { useStore } from '../lib/store'
 import { fmtDate, money, nightsBetween, toISO } from '../lib/utils'
+import { api, errorText } from '../lib/api'
+import type { Trip } from '../lib/store'
+
+/** Guests who booked without an account can find a booking with its code and email. */
+function FindBooking() {
+  const { rememberTrip } = useStore()
+  const [code, setCode] = useState('')
+  const [email, setEmail] = useState('')
+  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState(false)
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    setMsg('')
+    try {
+      const { trip } = await api<{ trip: Trip }>(`/api/bookings/lookup?code=${encodeURIComponent(code.trim())}&email=${encodeURIComponent(email.trim())}`)
+      if (trip.status === 'cancelled') setMsg('This booking was cancelled.')
+      else rememberTrip(trip)
+    } catch (err) {
+      setMsg(errorText(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <form className="panel find-booking" onSubmit={submit}>
+      <h2 className="subhead">Find a booking</h2>
+      <p className="muted small">Booked without an account? Enter your confirmation code and the email you used.</p>
+      <div className="row gap-sm wrap">
+        <input aria-label="Confirmation code" placeholder="HVXXXXXX" value={code} onChange={(e) => setCode(e.target.value)} required />
+        <input aria-label="Email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+        <button className="btn btn--ghost" disabled={busy}>{busy ? 'Searching…' : 'Find booking'}</button>
+      </div>
+      {msg && <p className="field__err" role="alert">{msg}</p>}
+    </form>
+  )
+}
 
 export default function Trips() {
-  const { trips, getListing, cancelTrip } = useStore()
+  const { trips, getListing, cancelTrip, online, user } = useStore()
   const [params] = useSearchParams()
   const confirmed = params.get('confirmed')
   const justBooked = trips.find((t) => t.code === confirmed)
@@ -61,7 +99,7 @@ export default function Trips() {
                           </p>
                           <div className="trip__foot">
                             <span><strong>{money(t.total)}</strong> <span className="muted">· {t.code}</span></span>
-                            <button className="link-btn danger" onClick={() => confirm('Cancel this reservation?') && cancelTrip(t.code)}>Cancel</button>
+                            <button className="link-btn danger" onClick={() => confirm('Cancel this reservation?') && cancelTrip(t.code).catch((e) => alert(errorText(e)))}>Cancel</button>
                           </div>
                         </div>
                       </article>
@@ -73,6 +111,8 @@ export default function Trips() {
           )}
         </>
       )}
+
+      {online && !user && <FindBooking />}
     </div>
   )
 }

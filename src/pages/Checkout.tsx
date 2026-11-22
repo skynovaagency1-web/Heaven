@@ -18,7 +18,7 @@ export default function Checkout() {
   const { id = '' } = useParams()
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const { getListing, addTrip, online } = useStore()
+  const { getListing, addTrip, online, payments } = useStore()
   const listing = getListing(id)
 
   const checkIn = params.get('checkIn')
@@ -59,9 +59,12 @@ export default function Checkout() {
   if (form.name.trim().length < 2) errors.name = 'Enter your full name'
   if (!/^\S+@\S+\.\S+$/.test(form.email)) errors.email = 'Enter a valid email'
   if (form.phone.replace(/\D/g, '').length < 7) errors.phone = 'Enter a phone number'
-  if (form.card.replace(/\s/g, '').length < 15) errors.card = 'Enter a valid card number'
-  if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(form.exp)) errors.exp = 'MM/YY'
-  if (form.cvc.length < 3) errors.cvc = 'CVC'
+  // With Stripe on, card details are entered on Stripe's page, never here.
+  if (!payments) {
+    if (form.card.replace(/\s/g, '').length < 15) errors.card = 'Enter a valid card number'
+    if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(form.exp)) errors.exp = 'MM/YY'
+    if (form.cvc.length < 3) errors.cvc = 'CVC'
+  }
   if (!listing.instantBook && form.message.trim().length < 10) errors.message = 'Introduce yourself to the host'
   if (!agree) errors.agree = 'Please accept the house rules and policy'
   const valid = Object.keys(errors).length === 0
@@ -74,8 +77,7 @@ export default function Checkout() {
     setProcessing(true)
     setFailure('')
     try {
-      // Card details stay in the browser: payments are not wired up yet.
-      const t = await addTrip({
+      const { trip: t, checkoutUrl } = await addTrip({
         listingId: listing!.id,
         checkIn: checkIn!,
         checkOut: checkOut!,
@@ -86,7 +88,9 @@ export default function Checkout() {
         phone: form.phone.trim(),
         message: form.message.trim(),
         instantBook: listing!.instantBook,
+        pay,
       })
+      if (checkoutUrl) return window.location.assign(checkoutUrl)
       navigate(`/trips?confirmed=${t.code}`)
     } catch (err) {
       setFailure(errorText(err))
@@ -158,6 +162,13 @@ export default function Checkout() {
 
           <section className="panel">
             <h2>Payment <span className="secure"><Icon name="lock" size={14} /> Secure checkout</span></h2>
+            {payments ? (
+              <p className="muted">
+                Next, you’ll enter your card on Stripe’s secure page. We never see or store your card number.
+                {!listing.instantBook && ' If the host declines your request, you get a full refund.'}
+              </p>
+            ) : (
+              <>
             <div className="fields">
               <label className="field field--full">
                 <span>Card number</span>
@@ -179,6 +190,8 @@ export default function Checkout() {
               </label>
             </div>
             <p className="muted small">Demo checkout. No real payment is processed.</p>
+              </>
+            )}
           </section>
 
           <section className="panel">
@@ -197,7 +210,7 @@ export default function Checkout() {
           {failure && <p className="field__err" role="alert">{failure}</p>}
           <button className="btn btn--primary btn--block btn--lg" type="submit" disabled={processing}>
             {processing ? <span className="spinner" /> : <Icon name="lock" size={18} />}
-            {processing ? 'Processing…' : listing.instantBook ? `Confirm and pay ${money(pay === 'full' ? price.total : Math.round(price.total / 2))}` : 'Send booking request'}
+            {processing ? 'Processing…' : payments ? `Continue to payment · ${money(pay === 'full' ? price.total : Math.round(price.total / 2))}` : listing.instantBook ? `Confirm and pay ${money(pay === 'full' ? price.total : Math.round(price.total / 2))}` : 'Send booking request'}
           </button>
           {touched && !valid && <p className="field__err center">Please fix the highlighted fields.</p>}
         </form>

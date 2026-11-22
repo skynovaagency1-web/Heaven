@@ -11,8 +11,10 @@ export interface Trip {
   total: number
   guestName: string
   email: string
-  status: 'confirmed' | 'requested' | 'cancelled'
+  status: 'pending' | 'confirmed' | 'requested' | 'cancelled' | 'expired'
   createdAt: string
+  /** Whole USD charged so far (0 in demo mode). */
+  paid?: number
 }
 
 export interface User {
@@ -32,6 +34,7 @@ export interface BookingInput {
   phone: string
   message: string
   instantBook: boolean
+  pay: 'full' | 'split'
 }
 
 export interface MessageInput {
@@ -46,6 +49,8 @@ export interface MessageInput {
 interface Store {
   /** null while checking, true when the Cloudflare API answers, false in browser-only demo mode. */
   online: boolean | null
+  /** True when the API takes real card payments through Stripe Checkout. */
+  payments: boolean
   user: User | null
   signIn: (email: string, password: string) => Promise<void>
   signUp: (name: string, email: string, password: string) => Promise<void>
@@ -55,9 +60,13 @@ interface Store {
   wishlist: string[]
   toggleWish: (id: string) => void
   trips: Trip[]
-  addTrip: (b: BookingInput) => Promise<Trip>
+  /** Saves the booking. With payments on, also returns the Stripe page to send the guest to. */
+  addTrip: (b: BookingInput) => Promise<{ trip: Trip; checkoutUrl?: string }>
   rememberTrip: (t: Trip) => void
-  cancelTrip: (code: string) => Promise<void>
+  /** Re-reads a booking from the server, e.g. after Stripe sends the guest back. */
+  reloadTrip: (code: string, email: string) => Promise<Trip | null>
+  /** Resolves to the amount refunded in whole USD. */
+  cancelTrip: (code: string) => Promise<number>
   customListings: Listing[]
   addListing: (l: Listing) => Promise<Listing>
   removeListing: (id: string) => Promise<void>
@@ -90,6 +99,7 @@ function usePersisted<T>(key: string, initial: T) {
 
 interface MeResponse {
   user: User | null
+  payments?: boolean
   wishlist?: string[]
   trips?: Trip[]
   listings?: Listing[]
@@ -141,7 +151,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const wishlist = signedIn ? me.wishlist ?? [] : localWish
     const serverTrips = signedIn ? me.trips ?? [] : []
     const trips = [...serverTrips, ...localTrips.filter((t) => !serverTrips.some((s) => s.code === t.code))].filter(
-      (t) => t.status !== 'cancelled',
+      (t) => t.status !== 'cancelled' && t.status !== 'expired',
     )
 
     const localTrip = (b: BookingInput): Trip => ({
@@ -159,6 +169,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     return {
       online,
+      payments: live && !!me.payments,
       user,
       async signIn(email, password) {
         if (!live) {
@@ -198,25 +209,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       trips,
       async addTrip(b) {
         let t: Trip
+        let checkoutUrl: string | undefined
         try {
           if (!live) throw new ApiError(0, 'offline')
-          t = (await api<{ trip: Trip }>('/api/bookings', { method: 'POST', json: b })).trip
+          const r = await api<{ trip: Trip; checkoutUrl?: string }>('/api/bookings', { method: 'POST', json: b })
+          t = r.trip
+          checkoutUrl = r.checkoutUrl
         } catch (e) {
           if (!isOffline(e)) throw e
           t = localTrip(b)
         }
         if (signedIn) setMe((m) => ({ ...m, trips: [t, ...(m.trips ?? [])] }))
         else setLocalTrips((ts) => [t, ...ts])
-        return t
+        return { trip: t, checkoutUrl }
       },
       rememberTrip(t) {
         setLocalTrips((ts) => [t, ...ts.filter((x) => x.code !== t.code)])
       },
+      async reloadTrip(code, email) {
+        if (!live) return null
+        const { trip: t } = await api<{ trip: Trip }>(`/api/bookings/lookup?code=${encodeURIComponent(code)}&email=${encodeURIComponent(email)}`)
+        if (signedIn) setMe((m) => ({ ...m, trips: (m.trips ?? []).map((x) => (x.code === code ? t : x)) }))
+        setLocalTrips((ts) => ts.map((x) => (x.code === code ? t : x)))
+        return t
+      },
       async cancelTrip(code) {
         const t = trips.find((x) => x.code === code)
-        if (live) await api(`/api/bookings/${code}`, { method: 'DELETE', json: { email: t?.email } })
+        let refunded = 0
+        if (live) refunded = (await api<{ refunded?: number }>(`/api/bookings/${code}`, { method: 'DELETE', json: { email: t?.email } })).refunded ?? 0
         setLocalTrips((ts) => ts.filter((x) => x.code !== code))
         if (signedIn) setMe((m) => ({ ...m, trips: (m.trips ?? []).filter((x) => x.code !== code) }))
+        return refunded
       },
       customListings: mine,
       async addListing(l) {

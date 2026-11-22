@@ -12,10 +12,18 @@ export interface Env {
   DB: D1Database
   MEDIA: R2Bucket
   ASSETS: Fetcher
+  /** Secrets. Without STRIPE_SECRET_KEY, bookings are saved without payment (demo). */
+  STRIPE_SECRET_KEY?: string
+  STRIPE_WEBHOOK_SECRET?: string
 }
 
 const SESSION_COOKIE = 'heaven_session'
 const SESSION_DAYS = 30
+/** How long unpaid dates stay held while the guest is on Stripe Checkout (Stripe's minimum session life is 30 min). */
+const HOLD_MINUTES = 30
+const holdCutoff = () => new Date(Date.now() - HOLD_MINUTES * 60000).toISOString()
+/** SQL: bookings that block dates. Bind holdCutoff() for the "?". */
+const BLOCKING = "(status IN ('confirmed', 'requested') OR (status = 'pending' AND created_at > ?))"
 const MAX_UPLOAD = 8 * 1024 * 1024
 const IMAGE_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -81,6 +89,7 @@ async function api(req: Request, url: URL, env: Env): Promise<Response> {
   m = path.match(/^\/api\/bookings\/([\w-]+)$/)
   if (m && method === 'DELETE') return cancelBooking(req, env, m[1])
   if (path === '/api/host/reservations' && method === 'GET') return hostReservations(req, env)
+  if (path === '/api/stripe/webhook' && method === 'POST') return stripeWebhook(req, env)
 
   // Wishlist
   m = path.match(/^\/api\/wishlist\/([\w-]+)$/)
@@ -142,14 +151,16 @@ async function signout(req: Request, env: Env) {
 
 async function me(req: Request, env: Env) {
   const user = await currentUser(req, env)
-  if (!user) return json({ user: null })
+  const payments = !!env.STRIPE_SECRET_KEY
+  if (!user) return json({ user: null, payments })
   const [wishlist, trips, listings] = await Promise.all([
     env.DB.prepare('SELECT listing_id FROM wishlist WHERE user_id = ? ORDER BY created_at DESC').bind(user.id).all<{ listing_id: string }>(),
-    env.DB.prepare("SELECT * FROM bookings WHERE user_id = ? AND status != 'cancelled' ORDER BY created_at DESC").bind(user.id).all<BookingRow>(),
+    env.DB.prepare(`SELECT * FROM bookings WHERE user_id = ? AND ${BLOCKING} ORDER BY created_at DESC`).bind(user.id, holdCutoff()).all<BookingRow>(),
     env.DB.prepare('SELECT data, paused FROM listings WHERE owner_id = ? ORDER BY created_at DESC').bind(user.id).all<{ data: string; paused: number }>(),
   ])
   return json({
     user: publicUser(user),
+    payments,
     wishlist: wishlist.results.map((r) => r.listing_id),
     trips: trips.results.map(trip),
     listings: listings.results.map((r) => JSON.parse(r.data)),
@@ -266,9 +277,9 @@ async function deleteListing(req: Request, env: Env, id: string) {
 
 async function bookedNights(env: Env, id: string) {
   const rows = await env.DB.prepare(
-    "SELECT check_in, check_out FROM bookings WHERE listing_id = ? AND status != 'cancelled' AND check_out >= ?",
+    `SELECT check_in, check_out FROM bookings WHERE listing_id = ? AND ${BLOCKING} AND check_out >= ?`,
   )
-    .bind(id, new Date().toISOString().slice(0, 10))
+    .bind(id, holdCutoff(), new Date().toISOString().slice(0, 10))
     .all<{ check_in: string; check_out: string }>()
   const nights: string[] = []
   for (const r of rows.results) for (let d = r.check_in; d < r.check_out; d = nextDay(d)) nights.push(d)
@@ -289,8 +300,12 @@ interface BookingRow {
   total: number
   guest_name: string
   email: string
-  status: 'confirmed' | 'requested' | 'cancelled'
+  status: 'pending' | 'confirmed' | 'requested' | 'cancelled' | 'expired'
   created_at: string
+  amount_paid?: number
+  amount_due?: number
+  stripe_payment_intent?: string | null
+  refunded?: number
 }
 
 const trip = (b: BookingRow) => ({
@@ -304,11 +319,12 @@ const trip = (b: BookingRow) => ({
   email: b.email,
   status: b.status,
   createdAt: b.created_at,
+  paid: b.amount_paid ?? 0,
 })
 
 async function createBooking(req: Request, env: Env) {
   const user = await currentUser(req, env)
-  const b = await readJson<{ listingId?: string; checkIn?: string; checkOut?: string; guests?: number; guestName?: string; email?: string; phone?: string; message?: string }>(req)
+  const b = await readJson<{ listingId?: string; checkIn?: string; checkOut?: string; guests?: number; guestName?: string; email?: string; phone?: string; message?: string; pay?: string }>(req)
   const found = await findListing(env, str(b.listingId, 'listing', 1, 120))
   if (!found || found.paused) throw new HttpError(404, 'This home is not available.')
   const { listing } = found
@@ -320,23 +336,58 @@ async function createBooking(req: Request, env: Env) {
   if (nights < 1 || nights > 90) throw new HttpError(400, 'Stays can be 1 to 90 nights.')
   const guests = int(b.guests, 1, listing.guests)
   const clash = await env.DB.prepare(
-    "SELECT 1 FROM bookings WHERE listing_id = ? AND status != 'cancelled' AND check_in < ? AND check_out > ? LIMIT 1",
+    `SELECT 1 FROM bookings WHERE listing_id = ? AND ${BLOCKING} AND check_in < ? AND check_out > ? LIMIT 1`,
   )
-    .bind(listing.id, checkOut, checkIn)
+    .bind(listing.id, holdCutoff(), checkOut, checkIn)
     .first()
   if (clash) throw new HttpError(409, 'Those dates were just booked. Please pick other dates.')
 
   const total = priceBreakdown(listing.price, nights, listing.cleaningFee).total
   const code = 'HV' + b64url(crypto.getRandomValues(new Uint8Array(6))).replace(/[^A-Za-z0-9]/g, '').slice(0, 6).toUpperCase()
-  const status = listing.instantBook ? 'confirmed' : 'requested'
+  const guestName = str(b.guestName, 'name', 2, 120)
+  const email = emailOf(b.email)
+  const paying = !!env.STRIPE_SECRET_KEY
+  const due = b.pay === 'split' ? Math.round(total / 2) : total
+  const status = paying ? 'pending' : listing.instantBook ? 'confirmed' : 'requested'
   await env.DB.prepare(
-    `INSERT INTO bookings (code, listing_id, user_id, check_in, check_out, guests, total, guest_name, email, phone, message, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO bookings (code, listing_id, user_id, check_in, check_out, guests, total, guest_name, email, phone, message, status${paying ? ', amount_due' : ''})
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${paying ? ', ?' : ''})`,
   )
-    .bind(code, listing.id, user?.id ?? null, checkIn, checkOut, guests, total, str(b.guestName, 'name', 2, 120), emailOf(b.email), optStr(b.phone, 40), optStr(b.message, 2000), status)
+    .bind(code, listing.id, user?.id ?? null, checkIn, checkOut, guests, total, guestName, email, optStr(b.phone, 40), optStr(b.message, 2000), status, ...(paying ? [due] : []))
     .run()
   const row = (await env.DB.prepare('SELECT * FROM bookings WHERE code = ?').bind(code).first<BookingRow>())!
-  return json({ trip: trip(row) }, 201)
+  if (!paying) return json({ trip: trip(row) }, 201)
+
+  // Hand the guest to Stripe Checkout. The amount comes from the server-side price above.
+  const site = new URL(req.url).origin
+  const back = `${site}/book/${encodeURIComponent(listing.id)}?checkIn=${checkIn}&checkOut=${checkOut}&guests=${guests}`
+  const form = new URLSearchParams({
+    mode: 'payment',
+    customer_email: email,
+    client_reference_id: code,
+    'metadata[booking]': code,
+    'payment_intent_data[metadata][booking]': code,
+    'line_items[0][quantity]': '1',
+    'line_items[0][price_data][currency]': 'usd',
+    'line_items[0][price_data][unit_amount]': String(due * 100),
+    'line_items[0][price_data][product_data][name]': `${listing.title}, ${listing.city}`,
+    'line_items[0][price_data][product_data][description]':
+      `${checkIn} to ${checkOut}, ${nights} night${nights > 1 ? 's' : ''}, ${guests} guest${guests > 1 ? 's' : ''}` +
+      (due < total ? `. 50% deposit of ${total} USD total` : ''),
+    success_url: `${site}/trips?confirmed=${code}`,
+    cancel_url: back,
+    expires_at: String(Math.floor(Date.now() / 1000) + HOLD_MINUTES * 60 + 60),
+  })
+  if (due < total) form.set('payment_intent_data[setup_future_usage]', 'off_session')
+  let session: { id: string; url: string }
+  try {
+    session = await stripe<{ id: string; url: string }>(env, 'checkout/sessions', form)
+  } catch (e) {
+    await env.DB.prepare("UPDATE bookings SET status = 'expired' WHERE code = ?").bind(code).run()
+    throw e
+  }
+  await env.DB.prepare('UPDATE bookings SET stripe_session_id = ? WHERE code = ?').bind(session.id, code).run()
+  return json({ trip: trip(row), checkoutUrl: session.url }, 201)
 }
 
 async function lookupBooking(url: URL, env: Env) {
@@ -353,15 +404,27 @@ async function cancelBooking(req: Request, env: Env, code: string) {
   const row = await env.DB.prepare('SELECT * FROM bookings WHERE code = ?').bind(code.toUpperCase()).first<BookingRow>()
   const allowed = row && ((user && row.user_id === user.id) || (body.email && body.email.trim().toLowerCase() === row.email))
   if (!row || !allowed) throw new HttpError(404, 'Booking not found')
-  await env.DB.prepare("UPDATE bookings SET status = 'cancelled' WHERE code = ?").bind(row.code).run()
-  return json({ ok: true })
+  if (row.status === 'cancelled' || row.status === 'expired') return json({ ok: true, refunded: 0 })
+  // Refund what the cancellation policy allows: everything 30+ days out, half the total 7+ days out.
+  const daysOut = (Date.parse(row.check_in) - Date.now()) / 864e5
+  const allowance = daysOut >= 30 ? row.total : daysOut >= 7 ? Math.round(row.total / 2) : 0
+  const refund = Math.min(row.amount_paid ?? 0, allowance)
+  if (refund > 0 && row.stripe_payment_intent) {
+    await stripe(env, 'refunds', new URLSearchParams({
+      payment_intent: row.stripe_payment_intent,
+      amount: String(refund * 100),
+      'metadata[booking]': row.code,
+    }))
+  }
+  await env.DB.prepare("UPDATE bookings SET status = 'cancelled', refunded = ? WHERE code = ?").bind(refund, row.code).run()
+  return json({ ok: true, refunded: refund })
 }
 
 async function hostReservations(req: Request, env: Env) {
   const user = await requireUser(req, env)
   const rows = await env.DB.prepare(
     `SELECT b.* FROM bookings b JOIN listings l ON l.id = b.listing_id
-     WHERE l.owner_id = ? AND b.status != 'cancelled' ORDER BY b.check_in`,
+     WHERE l.owner_id = ? AND b.status IN ('confirmed', 'requested') ORDER BY b.check_in`,
   )
     .bind(user.id)
     .all<BookingRow>()
@@ -422,6 +485,79 @@ async function media(url: URL, env: Env) {
   headers.set('x-content-type-options', 'nosniff')
   if (!headers.has('cache-control')) headers.set('cache-control', 'public, max-age=31536000, immutable')
   return new Response(obj.body, { headers })
+}
+
+/* ----------------------------------------------------------------- stripe */
+
+async function stripe<T = unknown>(env: Env, path: string, body: URLSearchParams): Promise<T> {
+  const down = new HttpError(502, 'The payment service is not responding. Please try again.')
+  const res = await fetch(`https://api.stripe.com/v1/${path}`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, 'content-type': 'application/x-www-form-urlencoded' },
+    body,
+  }).catch((e) => {
+    console.error('stripe', path, e)
+    throw down
+  })
+  const data = (await res.json().catch(() => ({}))) as T & { error?: { message?: string } }
+  if (!res.ok) {
+    console.error('stripe', path, data.error?.message)
+    throw down
+  }
+  return data
+}
+
+/** Stripe calls this after Checkout. It is authenticated by the Stripe-Signature header, not cookies. */
+async function stripeWebhook(req: Request, env: Env) {
+  if (!env.STRIPE_WEBHOOK_SECRET) throw new HttpError(503, 'Webhook not configured')
+  const payload = await req.text()
+  if (!(await validStripeSignature(payload, req.headers.get('stripe-signature') ?? '', env.STRIPE_WEBHOOK_SECRET))) {
+    throw new HttpError(400, 'Bad signature')
+  }
+  const event = JSON.parse(payload) as {
+    type: string
+    data: { object: { id: string; payment_status?: string; payment_intent?: string; amount_total?: number; metadata?: { booking?: string } } }
+  }
+  const s = event.data.object
+  const code = s.metadata?.booking
+  if (!code) return json({ ok: true })
+
+  if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
+    if (s.payment_status !== 'paid') return json({ ok: true })
+    const row = await env.DB.prepare('SELECT listing_id, status FROM bookings WHERE code = ?').bind(code).first<{ listing_id: string; status: string }>()
+    if (!row) return json({ ok: true })
+    if (row.status === 'cancelled' && s.payment_intent) {
+      // The guest cancelled while the payment page was still open: give the money back.
+      await stripe(env, 'refunds', new URLSearchParams({ payment_intent: s.payment_intent, 'metadata[booking]': code }))
+      await env.DB.prepare('UPDATE bookings SET amount_paid = ?, refunded = ?, stripe_payment_intent = ? WHERE code = ?')
+        .bind(Math.round((s.amount_total ?? 0) / 100), Math.round((s.amount_total ?? 0) / 100), s.payment_intent, code)
+        .run()
+      return json({ ok: true })
+    }
+    const found = await findListing(env, row.listing_id)
+    const status = found && !found.listing.instantBook ? 'requested' : 'confirmed'
+    // 'expired' too: a guest can pay at the last second, after the hold lapsed. Keep the money and the booking.
+    await env.DB.prepare(
+      `UPDATE bookings SET status = ?, amount_paid = ?, stripe_payment_intent = ?
+       WHERE code = ? AND status IN ('pending', 'expired')`,
+    )
+      .bind(status, Math.round((s.amount_total ?? 0) / 100), s.payment_intent ?? null, code)
+      .run()
+  } else if (event.type === 'checkout.session.expired' || event.type === 'checkout.session.async_payment_failed') {
+    await env.DB.prepare("UPDATE bookings SET status = 'expired' WHERE code = ? AND status = 'pending'").bind(code).run()
+  }
+  return json({ ok: true })
+}
+
+async function validStripeSignature(payload: string, header: string, secret: string) {
+  const parts = header.split(',')
+  const t = Number(parts.find((p) => p.startsWith('t='))?.slice(2))
+  const sigs = parts.filter((p) => p.startsWith('v1=')).map((p) => p.slice(3))
+  if (!t || !sigs.length || Math.abs(Date.now() / 1000 - t) > 300) return false
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${t}.${payload}`)))
+  const hex = [...mac].map((b) => b.toString(16).padStart(2, '0')).join('')
+  return sigs.some((sig) => sig.length === hex.length && [...sig].reduce((d, c, i) => d | (c.charCodeAt(0) ^ hex.charCodeAt(i)), 0) === 0)
 }
 
 /* ----------------------------------------------------------------- helpers */

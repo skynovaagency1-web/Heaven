@@ -6483,6 +6483,10 @@ h3 em {
   background: rgba(93, 44, 12, 0.08);
   color: var(--red);
 }
+.status--pending {
+  background: rgba(181, 84, 28, 0.1);
+  color: #b5541c;
+}
 .map__pin {
   background: var(--red-2);
   box-shadow: 0 0 0 10px rgba(93, 44, 12, 0.12);

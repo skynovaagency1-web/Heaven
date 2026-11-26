@@ -28,7 +28,32 @@ What the API stores in D1: accounts (PBKDF2 passwords, HttpOnly session cookie),
 - New migration: add `migrations/000N_name.sql`, then `npm run db:migrate` (needs `wrangler login`).
 - Read data: Cloudflare dashboard → Storage & Databases → D1 → heaven-db → Console, e.g. `SELECT * FROM bookings ORDER BY created_at DESC`.
 - If the API is not reachable (plain `vite dev`), the site falls back to browser storage so the demo still works.
-- Payments are still a demo: card details never leave the browser. Connect Stripe before taking real money.
+- Payments: Stripe Checkout, switched on by the `STRIPE_SECRET_KEY` secret (see below). Without it, bookings are saved but nothing is charged.
+
+## Payments (Stripe)
+
+How a paid booking works:
+1. `POST /api/bookings` prices the stay on the server and saves it as `pending`, which holds the dates for 30 minutes. It then returns a Stripe Checkout link.
+2. The guest pays on Stripe's page, so card numbers never reach this site.
+3. Stripe calls `/api/stripe/webhook`. The booking becomes `confirmed` for instant-book homes, or `requested` otherwise. If the guest never pays, it becomes `expired` and the dates free up.
+4. When a guest cancels, the refund follows the policy shown at checkout and is sent automatically: the full amount 30+ days before check-in, 50% of the total 7+ days before, nothing after that.
+
+Setup (do it in test mode first):
+1. Apply the schema change once: `npm run db:migrate`. This runs `migrations/0002_payments.sql`.
+2. In Stripe → Developers → API keys, copy the secret key (`sk_test_…`). In Cloudflare → Workers & Pages → heaven → Settings → Variables and Secrets, add it as a **Secret** named `STRIPE_SECRET_KEY`.
+3. In Stripe → Developers → Webhooks, add the endpoint `https://heaven.skynovaagency.workers.dev/api/stripe/webhook` with these events:
+   - `checkout.session.completed`
+   - `checkout.session.expired`
+   - `checkout.session.async_payment_succeeded`
+   - `checkout.session.async_payment_failed`
+
+   Copy its signing secret (`whsec_…`) into a Cloudflare secret named `STRIPE_WEBHOOK_SECRET`.
+4. Test with the card `4242 4242 4242 4242`, any future date and any CVC. Then swap in the live keys.
+
+Not built yet:
+- Charging the remaining 50% before check-in for "pay half now" bookings. The card is saved for it.
+- Host payouts (Stripe Connect).
+- Hosts accepting or declining requests.
 
 ## Pages
 
@@ -56,7 +81,7 @@ What the API stores in D1: accounts (PBKDF2 passwords, HttpOnly session cookie),
 
 - Built with Vite, React 18, TypeScript and React Router. No UI framework; styles live in `src/styles.css` with brand tokens at the top.
 - Look: warm "liquid glass" (sand gradient with taupe and sage glows, translucent glass cards and pills, olive-brown CTAs; Cormorant Garamond headings, Jost body, Martian Mono labels), using the brand sheet's mark. Mobile has a floating glass bottom bar. Set `HERO_VIDEO` in `src/brand.ts` to use a MotionSites background video in the hero.
-- The curated catalogue lives in `src/data/listings.ts`. Accounts, bookings, wishlists, host listings and messages live in Cloudflare D1; uploaded photos in R2. Payments are a demo; nothing is charged.
+- The curated catalogue lives in `src/data/listings.ts`. Accounts, bookings, wishlists, host listings and messages live in Cloudflare D1; uploaded photos in R2. Payments go through Stripe Checkout when `STRIPE_SECRET_KEY` is set.
 - Photos load from Unsplash. If one fails, a warm gradient placeholder is shown.
 - SPA routing: `wrangler.jsonc` (Cloudflare).
 
